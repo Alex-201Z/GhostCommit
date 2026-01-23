@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String?
+  name          String?
+  avatarUrl     String?
+
+  // OAuth fields
+  githubId      String?  @unique
+  gitlabId      String?  @unique
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastActiveAt  DateTime?
+
+  // Relations
+  teamMemberships TeamMember[]
+  activitySessions ActivitySession[]
+  dailySummaries   DailySummary[]
+
+  @@index([email])
+  @@index([githubId])
+  @@index([gitlabId])
+  @@map("users")
+}
+
+// Team model
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+
+  // Settings
+  settings    Json?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members     TeamMember[]
+  repos       Repo[]
+
+  @@index([slug])
+  @@map("teams")
+}
+
+// Team membership (many-to-many with roles)
+model TeamMember {
+  id        String   @id @default(uuid())
+  role      TeamRole @default(MEMBER)
+
+  // Foreign keys
+  userId    String
+  teamId    String
+
+  // Timestamps
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
+  @@map("team_members")
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// Repository model (connected Git repos)
+model Repo {
+  id              String   @id @default(uuid())
+  name            String
+  fullName        String   // e.g., "owner/repo"
+  url             String
+
+  // Git provider
+  provider        GitProvider
+  externalId      String   // GitHub/GitLab repo ID
+
+  // Settings
+  isActive        Boolean  @default(true)
+  branch          String?  @default("main")
+
+  // Foreign keys
+  teamId          String
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastSyncedAt    DateTime?
+
+  // Relations
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  activitySessions ActivitySession[]
+
+  @@unique([provider, externalId])
+  @@index([teamId])
+  @@index([fullName])
+  @@map("repos")
+}
+
+enum GitProvider {
+  GITHUB
+  GITLAB
+}
+
+// Activity Session (work session detected by agent)
+model ActivitySession {
+  id              String   @id @default(uuid())
+
+  // Session data
+  startTime       DateTime
+  endTime         DateTime?
+  durationMs      Int?     // Duration in milliseconds
+
+  // Context
+  filesModified   Json?    // Array of file paths
+  linesAdded      Int?
+  linesDeleted    Int?
+  commitCount     Int      @default(0)
+
+  // Metadata from agent
+  metadata        Json?    // IDE used, OS, etc.
+
+  // Foreign keys
+  userId          String
+  repoId          String?
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repo            Repo?    @relation(fields: [repoId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([repoId])
+  @@index([startTime])
+  @@map("activity_sessions")
+}
+
+// Daily Summary (AI-generated summary of daily work)
+model DailySummary {
+  id              String   @id @default(uuid())
+
+  // Date
+  date            DateTime @db.Date
+
+  // Summary content
+  summary         String   @db.Text
+  highlights      Json?    // Key achievements
+
+  // Statistics
+  totalDurationMs Int
+  totalCommits    Int
+  totalFiles      Int
+
+  // Status
+  isGenerated     Boolean  @default(false)
+  isValidated     Boolean  @default(false)
+
+  // Foreign keys
+  userId          String
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("daily_summaries")
+}

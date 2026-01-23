@@ -1,0 +1,31 @@
+{
+  "name": "ghostcommit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Le travail que tu fais vraiment. Enfin visible.",
+  "workspaces": [
+    "backend",
+    "agent",
+    "shared/*"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:backend && npm run install:agent",
+    "install:backend": "cd backend && npm install",
+    "install:agent": "cd agent && npm install",
+    "dev:backend": "cd backend && npm run start:dev",
+    "dev:agent": "cd agent && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:agent": "cd agent && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:studio": "cd backend && npx prisma studio"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
