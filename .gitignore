@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -43,10 +42,6 @@ coverage/
 *.sqlite
 *.sqlite3
 postgres-data/
-
-# Prisma
-backend/prisma/migrations/*
-!backend/prisma/migrations/.gitkeep
 
 # Electron
 agent/dist/

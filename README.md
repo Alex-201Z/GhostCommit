@@ -120,7 +120,7 @@ cd GhostCommit
 ### 2. Installer les dépendances
 
 ```bash
-npm run install:all
+npm install
 ```
 
 Ou manuellement :
@@ -197,7 +197,7 @@ npm run dev:agent
 2. Créer une nouvelle OAuth App
 3. Configuration:
    - **Homepage URL**: `http://localhost:3000`
-   - **Callback URL**: `http://localhost:3000/auth/github/callback`
+   - **Callback URL**: `http://localhost:3000/api/v1/auth/github/callback`
 4. Copier `Client ID` et `Client Secret` dans `.env`
 
 ### Configuration GitLab OAuth
@@ -205,7 +205,7 @@ npm run dev:agent
 1. Aller sur https://gitlab.com/-/profile/applications
 2. Créer une nouvelle application
 3. Configuration:
-   - **Redirect URI**: `http://localhost:3000/auth/gitlab/callback`
+   - **Redirect URI**: `http://localhost:3000/api/v1/auth/gitlab/callback`
    - **Scopes**: `read_user`, `read_api`
 4. Copier `Application ID` et `Secret` dans `.env`
 
@@ -372,7 +372,11 @@ npm run db:studio           # Ouvrir Prisma Studio
 
 # Build
 npm run build:backend       # Build backend
-npm run build:agent         # Build agent
+npm run build:agent         # Compile agent TypeScript
+npm run lint                # Lint all workspaces
+npm run typecheck           # Typecheck all workspaces
+npm test                    # Run all tests
+npm run build               # Build all workspaces
 
 # Docker
 npm run docker:up           # Démarrer PostgreSQL + Redis

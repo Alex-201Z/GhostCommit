@@ -1,0 +1,55 @@
+# GhostCommit Privacy Model
+
+## Product boundary
+
+GhostCommit creates user-controlled proof-of-work reports from minimal development metadata. It is not monitoring software. The developer owns the data and explicitly chooses projects, report contents, approval, export, and sharing.
+
+## Allowed signals
+
+- Session start/end and neutral end reason.
+- User-authorized project identifier and display name.
+- Filtered paths relative to the authorized project root.
+- Aggregate Git statistics and explicitly selected commit references/messages.
+- User-written notes, blockers, and deliverables.
+- Non-identifying OS family and agent version when needed for support.
+
+## Forbidden data
+
+- File contents, code diffs, binary contents, clipboard contents.
+- Absolute paths or files outside explicitly authorized projects.
+- Raw hostname, stable hardware/machine identifier, username, or home-directory path.
+- Keystrokes, screenshots, browser activity, microphone, webcam, or presence data.
+- Passwords, `.env` values, secrets, private keys, certificates, tokens, and API keys.
+- Productivity scores, rankings, motivation inference, or evaluative use of time/lines changed.
+
+## Mandatory filtering
+
+The agent filters before persistence or transmission. The API independently rejects forbidden data. Minimum exclusions include `.git`, `node_modules`, `dist`, `build`, `.next`, `coverage`, `.env*`, key/certificate formats, `secrets`, `private`, and binary files.
+
+Paths crossing the API boundary are normalized project-relative POSIX-style strings. Values containing a drive root, UNC prefix, leading slash, traversal segment, or sensitive pattern are rejected.
+
+## Human control
+
+- Tracking is off until the user selects a project.
+- Pause/resume state must be visible and effective locally.
+- Generated reports start as private drafts.
+- Generated text and evidence can be edited or removed.
+- Export and sharing require preview and explicit approval.
+- Deletion and revocation must be effective and auditable in their owning phases.
+
+## AI boundary
+
+LLMs receive only filtered, previewable snapshots constructed for an explicit generation request. Prompts never contain file contents, absolute paths, hostnames, identifiers, secrets, excluded sessions, or raw provider payloads. Failures log a request identifier and safe error category only.
+
+## Current prototype warning
+
+The audited MVP does not yet enforce this model. In particular, the agent currently sends absolute paths and hostname metadata and stores its token/queue in plaintext. Those flows are development-only until replaced and covered by privacy regression tests.
+
+## Phase 1A identity and consent controls
+
+- OAuth state is random, hash-only in PostgreSQL, expiring and single-use.
+- GitHub provider access tokens exist only transiently during the server-side profile request; they are not persisted, logged, returned or placed in URLs.
+- Access tokens are short-lived. Refresh tokens are opaque, hash-only at rest, rotated on use and revocable by family.
+- The refresh cookie is HttpOnly and SameSite=Lax, limited to `/api/v1/auth`, and Secure in production.
+- Consent records contain the policy version, UTC acceptance timestamp and explicit source.
+- Consent and personal workspace creation do not authorize or activate activity collection. Tracking remains off until later explicit project authorization.
