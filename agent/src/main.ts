@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, dialog, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, shell, type Event } from 'electron';
 import * as path from 'path';
 import { ConfigManager } from './utils/config';
 import { ApiClient } from './services/apiClient';
@@ -228,7 +228,7 @@ app.whenReady().then(() => {
 });
 
 // Prevent app from closing when all windows are closed (system tray app)
-app.on('window-all-closed', (e) => {
+app.on('window-all-closed', (e: Event) => {
   e.preventDefault();
 });
 

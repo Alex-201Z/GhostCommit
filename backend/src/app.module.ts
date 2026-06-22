@@ -9,6 +9,8 @@ import { TeamsModule } from './teams/teams.module';
 import { ReposModule } from './repos/repos.module';
 import { ActivityModule } from './activity/activity.module';
 import { SummaryModule } from './summary/summary.module';
+import { WorkspacesModule } from './workspaces/workspaces.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { SummaryModule } from './summary/summary.module';
     ReposModule,
     ActivityModule,
     SummaryModule,
+    WorkspacesModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

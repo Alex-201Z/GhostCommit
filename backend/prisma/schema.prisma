@@ -12,25 +12,29 @@ datasource db {
 
 // User model
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  username      String?
-  name          String?
-  avatarUrl     String?
+  id        String  @id @default(uuid())
+  email     String  @unique
+  username  String?
+  name      String?
+  avatarUrl String?
 
   // OAuth fields
-  githubId      String?  @unique
-  gitlabId      String?  @unique
+  githubId String? @unique
+  gitlabId String? @unique
 
   // Timestamps
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastActiveAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastActiveAt DateTime?
 
   // Relations
-  teamMemberships TeamMember[]
-  activitySessions ActivitySession[]
-  dailySummaries   DailySummary[]
+  teamMemberships   TeamMember[]
+  activitySessions  ActivitySession[]
+  dailySummaries    DailySummary[]
+  authSessions      AuthSession[]
+  privacyConsents   PrivacyConsent[]
+  onboardingStatus  OnboardingStatus?
+  personalWorkspace Team?
 
   @@index([email])
   @@index([githubId])
@@ -40,41 +44,106 @@ model User {
 
 // Team model
 model Team {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  description String?
+  id              String  @id @default(uuid())
+  name            String
+  slug            String  @unique
+  description     String?
+  personalOwnerId String? @unique
 
   // Settings
-  settings    Json?
+  settings Json?
 
   // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  members     TeamMember[]
-  repos       Repo[]
+  members       TeamMember[]
+  repos         Repo[]
+  personalOwner User?        @relation(fields: [personalOwnerId], references: [id], onDelete: Cascade)
 
   @@index([slug])
   @@map("teams")
 }
 
+model OAuthState {
+  id         String    @id @default(uuid())
+  stateHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("oauth_states")
+}
+
+model AuthSession {
+  id           String    @id @default(uuid())
+  userId       String
+  tokenHash    String    @unique
+  familyId     String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy AuthSession? @relation("SessionRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   AuthSession? @relation("SessionRotation")
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model PrivacyConsent {
+  id            String        @id @default(uuid())
+  userId        String
+  policyVersion String
+  acceptedAt    DateTime      @default(now())
+  source        ConsentSource
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, policyVersion])
+  @@index([userId])
+  @@map("privacy_consents")
+}
+
+model OnboardingStatus {
+  userId      String    @id
+  currentStep String    @default("PRIVACY_CONSENT")
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_statuses")
+}
+
+enum ConsentSource {
+  ONBOARDING
+  API
+}
+
 // Team membership (many-to-many with roles)
 model TeamMember {
-  id        String   @id @default(uuid())
-  role      TeamRole @default(MEMBER)
+  id   String   @id @default(uuid())
+  role TeamRole @default(MEMBER)
 
   // Foreign keys
-  userId    String
-  teamId    String
+  userId String
+  teamId String
 
   // Timestamps
-  joinedAt  DateTime @default(now())
+  joinedAt DateTime @default(now())
 
   // Relations
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([userId, teamId])
   @@index([userId])
@@ -90,29 +159,29 @@ enum TeamRole {
 
 // Repository model (connected Git repos)
 model Repo {
-  id              String   @id @default(uuid())
-  name            String
-  fullName        String   // e.g., "owner/repo"
-  url             String
+  id       String @id @default(uuid())
+  name     String
+  fullName String // e.g., "owner/repo"
+  url      String
 
   // Git provider
-  provider        GitProvider
-  externalId      String   // GitHub/GitLab repo ID
+  provider   GitProvider
+  externalId String // GitHub/GitLab repo ID
 
   // Settings
-  isActive        Boolean  @default(true)
-  branch          String?  @default("main")
+  isActive Boolean @default(true)
+  branch   String? @default("main")
 
   // Foreign keys
-  teamId          String
+  teamId String
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  lastSyncedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastSyncedAt DateTime?
 
   // Relations
-  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team             Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
   activitySessions ActivitySession[]
 
   @@unique([provider, externalId])
@@ -128,33 +197,33 @@ enum GitProvider {
 
 // Activity Session (work session detected by agent)
 model ActivitySession {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Session data
-  startTime       DateTime
-  endTime         DateTime?
-  durationMs      Int?     // Duration in milliseconds
+  startTime  DateTime
+  endTime    DateTime?
+  durationMs Int? // Duration in milliseconds
 
   // Context
-  filesModified   Json?    // Array of file paths
-  linesAdded      Int?
-  linesDeleted    Int?
-  commitCount     Int      @default(0)
+  filesModified Json? // Array of file paths
+  linesAdded    Int?
+  linesDeleted  Int?
+  commitCount   Int   @default(0)
 
   // Metadata from agent
-  metadata        Json?    // IDE used, OS, etc.
+  metadata Json? // IDE used, OS, etc.
 
   // Foreign keys
-  userId          String
-  repoId          String?
+  userId String
+  repoId String?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  repo            Repo?    @relation(fields: [repoId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repo Repo? @relation(fields: [repoId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([repoId])
@@ -164,14 +233,14 @@ model ActivitySession {
 
 // Daily Summary (AI-generated summary of daily work)
 model DailySummary {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Date
-  date            DateTime @db.Date
+  date DateTime @db.Date
 
   // Summary content
-  summary         String   @db.Text
-  highlights      Json?    // Key achievements
+  summary    String @db.Text
+  highlights Json? // Key achievements
 
   // Statistics
   totalDurationMs Int
@@ -179,18 +248,18 @@ model DailySummary {
   totalFiles      Int
 
   // Status
-  isGenerated     Boolean  @default(false)
-  isValidated     Boolean  @default(false)
+  isGenerated Boolean @default(false)
+  isValidated Boolean @default(false)
 
   // Foreign keys
-  userId          String
+  userId String
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([userId])
