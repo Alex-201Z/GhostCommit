@@ -1,7 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createHash } from 'crypto';
-import request from 'supertest';
+import request = require('supertest');
 import { AppModule } from '../src/app.module';
 import { GithubOAuthClient, GithubProfile } from '../src/auth/github-oauth.client';
 import { PrismaService } from '../src/prisma/prisma.service';
