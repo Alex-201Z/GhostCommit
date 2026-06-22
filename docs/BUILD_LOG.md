@@ -76,3 +76,33 @@ GitHub OAuth, anti-CSRF state, rotating sessions, versioned consent, personal wo
 ### Open gate
 
 Phase 1A code and CI foundations are implemented, but the migration and six integration tests have not been executed against a live PostgreSQL instance in this local environment. Phase 1B must not start until that PostgreSQL gate passes locally or in CI.
+
+## 2026-06-23 — Phase 1A PostgreSQL CI gate closure
+
+### Scope
+
+Validation only. No Phase 1B UI, repository connection, agent, collection or reporting work was started.
+
+### CI contract verified
+
+- GitHub Actions service: `postgres:16-alpine`, database `ghostcommit_test`, health-checked with `pg_isready`.
+- `DATABASE_URL` targets `postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`.
+- Dependencies install with `npm ci --ignore-scripts`; no `npm install` or forced audit upgrade is used.
+- Prisma Client generation runs before `prisma migrate deploy`.
+- `prisma migrate deploy` runs before the PostgreSQL integration suite.
+- `RUN_DATABASE_TESTS=true` is defined for the job.
+- The e2e bootstrap throws when `CI=true` without `RUN_DATABASE_TESTS=true`, preventing silent skips.
+
+### Real PostgreSQL evidence
+
+- Pull request: https://github.com/Alex-201Z/GhostCommit/pull/4
+- First run: https://github.com/Alex-201Z/GhostCommit/actions/runs/27988259608 — migration succeeded; e2e failed because the Supertest default import was not CommonJS-compatible on Linux.
+- Minimal correction: use `import request = require('supertest')`; no product or dependency change.
+- Passing run: https://github.com/Alex-201Z/GhostCommit/actions/runs/27988421002
+- Migration `20260622_phase_1a_auth_foundations` applied successfully to PostgreSQL 16.
+- PostgreSQL e2e: 6/6 passed, covering invalid/expired/consumed OAuth state, user creation/reconnection, unique personal workspace, versioned consent without collection, A/B ownership, refresh rotation/replay, logout, and absence of credentials in redirects/errors.
+- Lint, typecheck, unit tests and build also passed in the same run.
+
+### Gate decision
+
+The Phase 1A PostgreSQL validation gate is closed on the PR branch. Phase 1A can be considered validated once the final documentation-only run remains green and the PR is merged into `main`. Phase 1B remains unstarted.
