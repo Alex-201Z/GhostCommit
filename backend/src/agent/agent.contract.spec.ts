@@ -20,6 +20,9 @@ describe('Agent phase 3 contract', () => {
 
     expect(Reflect.getMetadata(PATH_METADATA, prototype.revoke as object)).toBe('installations/:id/revoke');
     expect(Reflect.getMetadata(METHOD_METADATA, prototype.revoke as object)).toBe(RequestMethod.POST);
+
+    expect(Reflect.getMetadata(PATH_METADATA, prototype.heartbeat as object)).toBe('heartbeat');
+    expect(Reflect.getMetadata(METHOD_METADATA, prototype.heartbeat as object)).toBe(RequestMethod.POST);
   });
 
   it('allows only non-identifying agent link metadata', async () => {

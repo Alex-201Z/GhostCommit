@@ -550,3 +550,43 @@ No Electron watcher activation, heartbeat, activity session sync, timeline, repo
 ### Gate decision
 
 Phase 3E dashboard project and agent controls are complete locally. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3F agent heartbeat and offline status
+
+### Scope
+
+Backend control-plane heartbeat for linked agents:
+
+- `POST /api/v1/agent/heartbeat` authenticated with the device `gca_*` token;
+- hash-only token lookup;
+- `lastSeenAt` refresh and `CONNECTED` status update;
+- stale `CONNECTED` installations become `OFFLINE` during installation listing;
+- revoked/invalid/missing tokens are rejected.
+
+No file watching, local scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Heartbeat has no request body and accepts no hostname, machine identifier, path, file content, code diff, secret, activity event or session payload.
+- Heartbeat/list responses return only the public installation shape and never return token material or token hashes.
+- Offline is treated as device connectivity only; it must not be displayed or used as productivity, presence or performance inference.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand` failed because `heartbeat` was not exposed by `AgentController`.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand` passed with 3/3 tests.
+- PostgreSQL e2e coverage was added for valid heartbeat, invalid token rejection, stale offline transition, reconnect heartbeat and revoked-token rejection. Local execution remains dependent on PostgreSQL availability and is expected to be validated in GitHub Actions.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 23/23, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Pending GitHub Actions PostgreSQL migration/e2e validation. Phase 4 must not start from this state.

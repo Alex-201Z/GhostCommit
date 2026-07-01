@@ -1,0 +1,1 @@
+ALTER TYPE "AgentStatus" ADD VALUE 'OFFLINE';

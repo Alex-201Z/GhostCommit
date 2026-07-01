@@ -493,3 +493,13 @@ La Phase 3E branche les contrôles utilisateur déjà exposés par le backend :
 - révocation d'un agent depuis `/app/settings/agent`.
 
 Ces actions mettent à jour les statuts visibles depuis les réponses API. Elles n'envoient aucun chemin local, contenu de fichier, diff, hostname, identifiant machine, token ou secret, et ne démarrent pas le watcher, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Heartbeat agent Phase 3F
+
+La Phase 3F ajoute `POST /api/v1/agent/heartbeat` avec le token appareil `gca_*` issu de la liaison agent :
+
+- le token reste hash-only en base ;
+- les tokens absents, invalides, expirés ou révoqués sont rejetés ;
+- le heartbeat met à jour uniquement `lastSeenAt` et le statut public de l'installation ;
+- les agents connectés sans heartbeat récent deviennent `OFFLINE` lors du listing ;
+- aucun hostname, identifiant machine, chemin local, contenu de fichier, diff, secret, session ou rapport n'est accepté.

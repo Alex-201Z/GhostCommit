@@ -5,6 +5,7 @@ import { AgentLinkConfirmDto, AgentLinkRequestDto } from './dto/agent-link.dto';
 
 const LINK_TTL_MINUTES = 10;
 const TOKEN_TTL_DAYS = 90;
+const AGENT_OFFLINE_AFTER_MS = Number(process.env.AGENT_OFFLINE_AFTER_MS ?? 5 * 60 * 1000);
 
 function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -112,12 +113,25 @@ export class AgentService {
   }
 
   async listInstallations(userId: string) {
+    await this.markStaleInstallationsOffline(userId);
     const installations = await this.prisma.agentInstallation.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
     return installations.map(publicInstallation);
+  }
+
+  async heartbeat(installationId: string) {
+    const installation = await this.prisma.agentInstallation.update({
+      where: { id: installationId },
+      data: {
+        status: 'CONNECTED',
+        lastSeenAt: new Date(),
+      },
+    });
+
+    return publicInstallation(installation);
   }
 
   async revoke(userId: string, id: string) {
@@ -136,5 +150,18 @@ export class AgentService {
     });
 
     return publicInstallation(revoked);
+  }
+
+  private async markStaleInstallationsOffline(userId: string) {
+    const cutoff = new Date(Date.now() - AGENT_OFFLINE_AFTER_MS);
+    await this.prisma.agentInstallation.updateMany({
+      where: {
+        userId,
+        status: 'CONNECTED',
+        revokedAt: null,
+        lastSeenAt: { lt: cutoff },
+      },
+      data: { status: 'OFFLINE' },
+    });
   }
 }

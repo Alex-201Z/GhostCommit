@@ -254,6 +254,7 @@ model AgentInstallation {
 enum AgentStatus {
   PENDING
   CONNECTED
+  OFFLINE
   PAUSED
   REVOKED
 }

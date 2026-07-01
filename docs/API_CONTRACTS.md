@@ -380,3 +380,35 @@ Client guarantees:
 - updates the visible installation status from the API response;
 - never renders token material, raw hostnames or stable machine identifiers;
 - does not start heartbeat, session synchronization, file watching or project scanning.
+
+## Phase 3F agent heartbeat and offline status
+
+Phase 3F adds a privacy-safe device-token heartbeat endpoint. It is control-plane only and does not accept activity, path or host metadata.
+
+### `POST /agent/heartbeat`
+
+Authentication:
+
+```http
+Authorization: Bearer <agent-token>
+```
+
+Behavior:
+
+- validates the one-time-issued device token by hash;
+- rejects missing, invalid, expired or revoked tokens with `401`;
+- sets the installation `status` to `CONNECTED`;
+- updates `lastSeenAt`;
+- returns the public installation shape only.
+
+The endpoint does not accept or require a request body.
+
+### Offline transition
+
+`GET /agent/installations` marks stale `CONNECTED` installations as `OFFLINE` when `lastSeenAt` is older than `AGENT_OFFLINE_AFTER_MS` or the development default. Revoked installations remain `REVOKED`.
+
+### Phase 3F invariants
+
+- Agent tokens are never returned by heartbeat or list responses.
+- Heartbeat responses never include `tokenHash`, raw hostname, stable machine identifier, local path, file content, code diff, secret, session payload or report data.
+- Revoked tokens cannot heartbeat.

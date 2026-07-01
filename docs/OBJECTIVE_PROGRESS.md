@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented locally and awaiting PostgreSQL CI. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -74,6 +74,11 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - project pause/resume/archive actions call existing owner-scoped endpoints from project detail;
   - agent revocation calls the existing owner-scoped revoke endpoint from settings;
   - visible statuses update from API responses without activity/session/report/sync calls.
+- Phase 3F agent heartbeat/offline backend:
+  - `POST /api/v1/agent/heartbeat` accepts only the linked device token in the Authorization header;
+  - heartbeat updates `lastSeenAt` and public status only;
+  - stale connected installations become `OFFLINE` during listing;
+  - missing, invalid and revoked tokens are rejected.
 
 ## Current technical decisions
 
@@ -88,6 +93,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Existing agent session collection remains disabled by default; future sync must opt in only after payload redaction, relative path validation and agent-token authorization are implemented.
 - Phase 3D keeps local folder selection out of the dashboard; the dashboard sends safe metadata only and does not activate collection.
 - Phase 3E treats pause/archive/revoke as control-plane mutations only; no collection-plane endpoints are called.
+- Phase 3F treats heartbeat/offline as device connectivity only, not user presence or productivity. Heartbeat has no body and accepts no activity payload.
 
 ## Important files modified in the current Phase 3B subphase
 
@@ -133,9 +139,26 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `docs/OBJECTIVE_PROGRESS.md`
 - `README.md`
 
+## Important files modified in the current Phase 3F subphase
+
+- `backend/prisma/schema.prisma`
+- `backend/prisma/migrations/20260702_phase_3f_agent_heartbeat/migration.sql`
+- `backend/src/agent/agent-token.guard.ts`
+- `backend/src/agent/agent.controller.ts`
+- `backend/src/agent/agent.service.ts`
+- `backend/src/agent/agent.module.ts`
+- `backend/src/agent/agent.contract.spec.ts`
+- `backend/test/auth.e2e-spec.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/BUILD_LOG.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
 ## Migrations
 
 - `20260701_phase_3a_projects_agent_foundations`: adds agent link/install tables, agent/project status enums, local project provider, and project privacy fields.
+- `20260702_phase_3f_agent_heartbeat`: adds `OFFLINE` to `AgentStatus`.
 
 ## Risks
 
@@ -148,6 +171,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `ActivityTracker` can still build unsafe legacy session payloads if future code opts into it before the Phase 4 filtering rewrite; keep sync disabled until that work lands.
 - Phase 3D does not yet wire a native Electron folder picker or import a real local project draft into the dashboard form.
 - Phase 3E does not yet implement heartbeat/offline status transitions; `AgentStatus.OFFLINE` still needs an owning backend subphase if required before Phase 4.
+- Phase 3F PostgreSQL migration/e2e validation is pending GitHub Actions because local PostgreSQL/Docker is unavailable in this environment.
 
 ## Tests executed
 
@@ -240,6 +264,19 @@ Phase 3E targeted checks on 2026-07-02:
 - `npm run build`: passed.
 - `git diff --check`: passed with CRLF warnings only.
 
+Phase 3F checks on 2026-07-02:
+
+- RED: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand` failed because `AgentController.heartbeat` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand`: passed, 3/3.
+- PostgreSQL e2e scenarios were added to `backend/test/auth.e2e-spec.ts` for heartbeat token auth, stale offline transition, reconnect and revoked-token rejection.
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 23/23, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -247,4 +284,4 @@ Phase 3E targeted checks on 2026-07-02:
 
 ## Next exact task
 
-Commit Phase 3E atomically, push the branch, verify GitHub Actions, then continue within Phase 3 without starting Phase 4.
+Commit Phase 3F atomically, push the branch, verify GitHub Actions PostgreSQL migration/e2e, then continue within Phase 3 without starting Phase 4.

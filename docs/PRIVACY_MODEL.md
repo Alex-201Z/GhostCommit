@@ -126,3 +126,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - Agent revocation calls only the owned installation revoke endpoint and updates the visible device status.
 - These controls do not send local paths, file contents, code diffs, hostnames, machine identifiers, tokens, secrets or activity payloads.
 - These controls do not start file watching, heartbeat, local scanning, session synchronization, report generation, export or sharing.
+
+## Phase 3F agent heartbeat boundary
+
+- The heartbeat endpoint authenticates with the device token issued during agent link confirmation, but stores and compares only token hashes.
+- Heartbeat has no body and does not accept hostnames, machine identifiers, local paths, file contents, code diffs, secrets, activity events or session payloads.
+- Heartbeat updates only `lastSeenAt` and the public installation status.
+- Listing installations may mark stale connected agents as `OFFLINE`; this is a device connectivity state, not a productivity, presence or performance signal.
+- Revoked or expired agent tokens are rejected before any status update.

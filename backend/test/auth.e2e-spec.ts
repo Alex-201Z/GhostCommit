@@ -368,4 +368,66 @@ databaseDescribe('Phase 1A authentication (PostgreSQL)', () => {
     expect(stored.tokenHash).toBeNull();
     expect(stored.revokedAt).toBeTruthy();
   });
+
+  it('accepts agent heartbeats with device tokens and marks stale agents offline', async () => {
+    const bearerA = await bearerForCurrentProfile();
+    const requestLink = await request(app.getHttpServer())
+      .post('/api/v1/agent/link-request')
+      .set('Authorization', bearerA)
+      .send({
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/v1/agent/link/confirm')
+      .set('Authorization', bearerA)
+      .send({
+        linkCode: requestLink.body.linkCode,
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer()).post('/api/v1/agent/heartbeat').expect(401);
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', 'Bearer gca_invalid')
+      .expect(401);
+
+    const heartbeat = await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(201);
+    expect(heartbeat.body.status).toBe('CONNECTED');
+    expect(heartbeat.body.id).toBe(confirmed.body.installation.id);
+    expect(JSON.stringify(heartbeat.body)).not.toMatch(/agentToken|tokenHash|hostname|machine/i);
+
+    await prisma.agentInstallation.update({
+      where: { id: confirmed.body.installation.id },
+      data: { lastSeenAt: new Date(Date.now() - 20 * 60 * 1000), status: 'CONNECTED' },
+    });
+    const staleList = await request(app.getHttpServer())
+      .get('/api/v1/agent/installations')
+      .set('Authorization', bearerA)
+      .expect(200);
+    expect(staleList.body[0].status).toBe('OFFLINE');
+
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(201)
+      .expect((response) => expect(response.body.status).toBe('CONNECTED'));
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/agent/installations/${confirmed.body.installation.id}/revoke`)
+      .set('Authorization', bearerA)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(401);
+  });
 });
