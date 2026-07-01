@@ -71,6 +71,28 @@ type TodaySummary = {
   canGenerateDraft: boolean;
 };
 
+type ProjectSummary = {
+  id: string;
+  displayName: string;
+  gitProvider: 'LOCAL' | 'GITHUB';
+  localAlias: string;
+  branch: string | null;
+  trackingStatus: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+  ignoredPatterns: string[];
+  includeFilePathsInReports: boolean;
+  excludedFromReports: boolean;
+  lastActivityAt?: string | null;
+};
+
+type AgentInstallation = {
+  id: string;
+  deviceLabel: string;
+  osFamily: string | null;
+  agentVersion: string | null;
+  status: 'PENDING' | 'CONNECTED' | 'PAUSED' | 'REVOKED';
+  lastSeenAt: string | null;
+};
+
 type AuthState =
   | { status: 'checking'; accessToken: null; user: null }
   | { status: 'anonymous'; accessToken: null; user: null }
@@ -606,6 +628,9 @@ function AppShell({
   const displayName = user?.name || user?.username || 'Dev';
   const page = shellPageFor(location.pathname);
   const isToday = location.pathname === '/app' || location.pathname.startsWith('/app/today');
+  const projectDetailMatch = location.pathname.match(/^\/app\/projects\/([^/]+)$/);
+  const isProjects = location.pathname === '/app/projects';
+  const isAgentSettings = location.pathname === '/app/settings/agent';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -666,6 +691,12 @@ function AppShell({
           <main className="flex-1 p-5">
             {isToday ? (
               <TodayDashboard accessToken={accessToken} />
+            ) : projectDetailMatch ? (
+              <ProjectDetailPage accessToken={accessToken} projectId={decodeURIComponent(projectDetailMatch[1])} />
+            ) : isProjects ? (
+              <ProjectsPage accessToken={accessToken} />
+            ) : isAgentSettings ? (
+              <AgentSettingsPage accessToken={accessToken} />
             ) : (
               <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">{page.eyebrow}</p>
@@ -678,6 +709,296 @@ function AppShell({
       </div>
     </div>
   );
+}
+
+function ProjectsPage({ accessToken }: { accessToken: string }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | ProjectSummary['trackingStatus']>('ALL');
+
+  useEffect(() => {
+    let active = true;
+    async function loadProjects() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/projects`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: authHeaders(accessToken),
+        });
+        if (!response.ok) throw new Error('Unable to load projects');
+        const body = await parseJson<ProjectSummary[]>(response);
+        if (!active) return;
+        setProjects(body);
+        setState('ready');
+      } catch {
+        if (active) setState('error');
+      }
+    }
+    void loadProjects();
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  const filtered = projects.filter((project) => {
+    const matchesQuery = project.displayName.toLowerCase().includes(query.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || project.trackingStatus === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
+
+  if (state === 'error') {
+    return (
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Projets</p>
+        <h1 className="mt-3 text-3xl font-semibold">Aucun projet connecté</h1>
+        <p className="mt-4 max-w-3xl leading-7 text-slate-300">
+          La connexion de repositories arrive dans une phase ultérieure. Aucun dossier local ou dépôt distant n’est suivi.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-5">
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Contrôle utilisateur</p>
+            <h1 className="mt-3 text-3xl font-semibold">Projets suivis</h1>
+            <p className="mt-4 max-w-3xl leading-7 text-slate-300">
+              Les projets affichés ici sont ceux que vous avez explicitement autorisés. Les chemins absolus restent locaux.
+            </p>
+          </div>
+          <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+            Ajouter un projet
+          </button>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_14rem]">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Rechercher un projet"
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.currentTarget.value as typeof statusFilter)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+            aria-label="Filtrer par statut"
+          >
+            <option value="ALL">Tous les statuts</option>
+            <option value="ACTIVE">En cours</option>
+            <option value="PAUSED">En pause</option>
+            <option value="ARCHIVED">Archivé</option>
+          </select>
+        </div>
+      </div>
+
+      {state === 'loading' ? (
+        <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">Chargement des projets…</p>
+      ) : null}
+
+      {state === 'ready' && projects.length === 0 ? (
+        <article className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="text-2xl font-semibold">Aucun dossier autorisé</h2>
+          <p className="mt-3 text-slate-300">
+            GhostCommit ne suit aucun dossier avant votre autorisation. Configurez l’agent pour sélectionner un projet Git local.
+          </p>
+          <Link to="/app/settings/agent" className="mt-5 inline-flex rounded-full border border-slate-700 px-4 py-2">
+            Configurer l’agent
+          </Link>
+        </article>
+      ) : null}
+
+      {filtered.length ? (
+        <div className="grid gap-4">
+          {filtered.map((project) => (
+            <article key={project.id} className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold">Projet {project.displayName}</h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {project.gitProvider} · {project.localAlias} · {statusLabel(project.trackingStatus)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Activité récente : {project.lastActivityAt ? 'signal récent disponible' : 'aucune activité synchronisée'}
+                  </p>
+                </div>
+                <Link to={`/app/projects/${project.id}`} className="rounded-full border border-slate-700 px-4 py-2 text-center">
+                  Ouvrir {project.displayName}
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ProjectDetailPage({ accessToken, projectId }: { accessToken: string; projectId: string }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [project, setProject] = useState<ProjectSummary | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadProject() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/projects/${encodeURIComponent(projectId)}`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: authHeaders(accessToken),
+        });
+        if (!response.ok) throw new Error('Unable to load project');
+        const body = await parseJson<ProjectSummary>(response);
+        if (!active) return;
+        setProject(body);
+        setState('ready');
+      } catch {
+        if (active) setState('error');
+      }
+    }
+    void loadProject();
+    return () => {
+      active = false;
+    };
+  }, [accessToken, projectId]);
+
+  if (state === 'loading') {
+    return <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">Chargement du projet…</p>;
+  }
+  if (state === 'error' || !project) {
+    return (
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <h1 className="text-3xl font-semibold">Projet introuvable</h1>
+        <p className="mt-4 text-slate-300">Aucune donnée locale sensible n’a été chargée.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-5">
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">{statusLabel(project.trackingStatus)}</p>
+        <h1 className="mt-3 text-3xl font-semibold">{project.displayName}</h1>
+        <p className="mt-4 text-slate-300">Projet local autorisé : {project.localAlias}</p>
+        <button type="button" className="mt-5 rounded-full border border-slate-700 px-4 py-2">
+          Mettre le suivi en pause
+        </button>
+      </div>
+      <div role="tablist" aria-label="Détail projet" className="flex flex-wrap gap-2">
+        {['Aperçu', 'Sessions', 'Livrables', 'Confidentialité'].map((tab) => (
+          <button key={tab} role="tab" type="button" className="rounded-full border border-slate-700 px-4 py-2">
+            {tab}
+          </button>
+        ))}
+      </div>
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <h2 className="text-2xl font-semibold">Confidentialité</h2>
+        <p className="mt-3 text-slate-300">Alias local : {project.localAlias}</p>
+        <p className="mt-3 text-slate-300">Patterns ignorés : {project.ignoredPatterns.join(', ') || 'aucun pattern personnalisé'}</p>
+        <p className="mt-3 text-slate-300">
+          {project.includeFilePathsInReports
+            ? 'Les chemins relatifs filtrés pourront être proposés dans les rapports.'
+            : 'Ne pas inclure les chemins de fichiers dans les rapports.'}
+        </p>
+        <p className="mt-3 text-slate-300">
+          {project.excludedFromReports ? 'Projet exclu des rapports.' : 'Projet inclus dans les brouillons privés.'}
+        </p>
+      </section>
+    </section>
+  );
+}
+
+function AgentSettingsPage({ accessToken }: { accessToken: string }) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [installations, setInstallations] = useState<AgentInstallation[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadInstallations() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/agent/installations`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: authHeaders(accessToken),
+        });
+        if (!response.ok) throw new Error('Unable to load agent installations');
+        const body = await parseJson<AgentInstallation[]>(response);
+        if (!active) return;
+        setInstallations(body);
+        setState('ready');
+      } catch {
+        if (active) setState('error');
+      }
+    }
+    void loadInstallations();
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  return (
+    <section className="space-y-5">
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Appareils liés</p>
+        <h1 className="mt-3 text-3xl font-semibold">Agent local</h1>
+        <p className="mt-4 max-w-3xl text-slate-300">
+          L’agent ne collecte rien tant qu’un projet local n’est pas explicitement choisi.
+        </p>
+        <button type="button" className="mt-5 rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+          Télécharger / relancer l’agent
+        </button>
+      </div>
+      {state === 'loading' ? (
+        <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">Chargement des appareils…</p>
+      ) : null}
+      {state === 'error' ? (
+        <p role="alert" className="rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-amber-100">
+          Impossible de charger les appareils. Aucune collecte n’est démarrée.
+        </p>
+      ) : null}
+      {state === 'ready' && installations.length === 0 ? (
+        <article className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="text-2xl font-semibold">Aucun appareil lié</h2>
+          <p className="mt-3 text-slate-300">Créez une demande de liaison depuis le dashboard avant de sélectionner un projet.</p>
+        </article>
+      ) : null}
+      {installations.map((installation) => (
+        <article key={installation.id} className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">{installation.deviceLabel}</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {installation.osFamily || 'OS non renseigné'} · version {installation.agentVersion || 'inconnue'} ·{' '}
+                {agentStatusLabel(installation.status)}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Dernier contact : {installation.lastSeenAt ? 'contact récent' : 'aucun contact'}
+              </p>
+            </div>
+            <button type="button" className="rounded-full border border-red-800 px-4 py-2 text-red-100">
+              Révoquer cet appareil
+            </button>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function statusLabel(status: ProjectSummary['trackingStatus']) {
+  if (status === 'PAUSED') return 'En pause';
+  if (status === 'ARCHIVED') return 'Archivé';
+  return 'Actif';
+}
+
+function agentStatusLabel(status: AgentInstallation['status']) {
+  if (status === 'CONNECTED') return 'Connecté';
+  if (status === 'PAUSED') return 'En pause';
+  if (status === 'REVOKED') return 'Révoqué';
+  return 'En attente';
 }
 
 const demoToday: TodaySummary = {

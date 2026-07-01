@@ -93,3 +93,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The project API stores a safe local alias rather than an absolute folder path. Drive roots, slashes, backslashes and absolute path-shaped values are rejected before persistence.
 - Project privacy settings include ignored patterns, optional exclusion from reports, and an option to omit file paths from future reports.
 - Phase 3A does not yet start the Electron agent watcher, sync activity sessions, read file contents, transmit file paths, generate reports, export data or share anything.
+
+## Phase 3B dashboard project and agent UI boundary
+
+- `/app/projects` reads only the authenticated user's project list and displays display names, providers, safe local aliases and tracking statuses.
+- `/app/projects/:id` displays project privacy settings without file contents, code diffs, absolute paths or activity payloads.
+- `/app/settings/agent` reads linked installations without rendering token material, raw hostnames or stable machine identifiers.
+- Add-project, pause and revoke controls are visible as user-control affordances only; their mutation flows remain deferred to later owning subphases.
+- Phase 3B does not start the Electron watcher, connect a local folder, sync sessions, generate reports, export or share data.

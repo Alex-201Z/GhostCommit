@@ -452,3 +452,12 @@ Pour toute question ou problème :
 ---
 
 **GhostCommit** - Parce que votre travail mérite d'être vu. 👻✨
+## Etat dashboard Phase 3B
+
+La Phase 3B ajoute les ecrans dashboard consent-gated suivants, sans activer la collecte locale :
+
+- `/app/projects` : liste les projets explicitement autorises via `GET /api/v1/projects`, avec alias local safe, statut, recherche et etat vide.
+- `/app/projects/:id` : affiche le detail privacy-first d'un projet, limite aux metadonnees safe et reglages de confidentialite.
+- `/app/settings/agent` : liste les installations agent via `GET /api/v1/agent/installations`, sans token, hostname brut ni identifiant machine stable.
+
+Cette phase ne demarre pas l'agent Electron, la surveillance de fichiers, la synchronisation de sessions, la generation de rapports, l'export ou le partage.

@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are complete and validated in GitHub Actions PostgreSQL 16. Next: Phase 3B dashboard project/agent screens. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete locally and require green PR CI before merge. Next: Phase 3C local agent/project selection foundations. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -54,6 +54,10 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - Prisma models for `AgentLinkRequest` and `AgentInstallation`;
   - project tracking status and privacy settings on `Repo`;
   - PostgreSQL e2e coverage added for ownership, absolute path rejection and agent revocation.
+- Phase 3B dashboard project/agent screens:
+  - `/app/projects` reads `GET /api/v1/projects` and shows safe aliases/status only;
+  - `/app/projects/:id` reads `GET /api/v1/projects/:id` and shows privacy settings without file contents or absolute paths;
+  - `/app/settings/agent` reads `GET /api/v1/agent/installations` without exposing token material, raw hostnames or stable machine identifiers.
 
 ## Current technical decisions
 
@@ -63,15 +67,12 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3A keeps the existing prototype `/repos/*` routes untouched for compatibility but introduces `/projects/*` as the V1 privacy-safe surface.
 - Local project authorization stores a safe alias, not a local absolute path. The Electron agent must keep the absolute path local-only in later subphases.
 - Agent link requests accept only non-identifying metadata. Agent tokens are one-time response values and hash-only at rest.
+- Phase 3B dashboard controls are read-only or UI-only affordances. Add-project, pause and revoke mutations remain deferred to their owning subphases.
 
-## Important files modified in the current Phase 3A subphase
+## Important files modified in the current Phase 3B subphase
 
-- `backend/prisma/schema.prisma`
-- `backend/prisma/migrations/20260701_phase_3a_projects_agent_foundations/migration.sql`
-- `backend/src/app.module.ts`
-- `backend/src/agent/*`
-- `backend/src/projects/*`
-- `backend/test/auth.e2e-spec.ts`
+- `dashboard/src/App.tsx`
+- `dashboard/src/App.test.tsx`
 - `docs/API_CONTRACTS.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/BUILD_LOG.md`
@@ -88,6 +89,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Real Today activity remains empty until later phases implement project authorization, agent linking, sessions and report generation.
 - Local PostgreSQL validation was blocked by unavailable Docker/PostgreSQL, so Phase 3A was validated in GitHub Actions PostgreSQL 16 instead.
 - The Electron agent still contains prototype flows that can expose absolute paths/legacy token handling; they were not expanded in Phase 3A and must be replaced in later Phase 3 subphases before real collection is allowed.
+- Phase 3B dashboard buttons for add-project, pause and revoke are not wired to mutations yet; this is intentional until the next owning subphase defines safe local/user-control flows.
 
 ## Tests executed
 
@@ -124,6 +126,19 @@ Phase 3A checks on 2026-07-01:
   - `npm run test:e2e --workspace @ghostcommit/backend`: passed with `RUN_DATABASE_TESTS=true`.
   - `npm run build`: passed.
 
+Phase 3B checks on 2026-07-01:
+
+- RED: dashboard tests for project list, project empty state, project detail privacy controls and agent settings failed against the placeholder shell before implementation.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed, 20/20.
+- `npm run db:generate`: passed.
+- `npm run db:validate`: initially failed because `DATABASE_URL` was not set.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, dashboard 20/20, agent/shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -131,4 +146,4 @@ Phase 3A checks on 2026-07-01:
 
 ## Next exact task
 
-Start Phase 3B dashboard project/agent screens with TDD, without enabling Electron collection yet.
+Start Phase 3C local agent/project selection foundations with TDD, without enabling unattended collection or transmitting absolute paths/file contents.

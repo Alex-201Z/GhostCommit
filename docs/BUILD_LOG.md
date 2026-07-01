@@ -362,3 +362,43 @@ Passing CI steps:
 ### Gate decision
 
 Phase 3A backend foundations are validated. Phase 3B may start next, limited to dashboard project/agent screens and still without activating Electron collection.
+
+## 2026-07-01 — Phase 3B dashboard project and agent screens
+
+### Scope
+
+Dashboard screens for existing Phase 3A backend contracts only:
+
+- `/app/projects` lists explicitly authorized projects from `GET /api/v1/projects`;
+- `/app/projects/:id` shows safe project detail and privacy settings from `GET /api/v1/projects/:id`;
+- `/app/settings/agent` lists linked local agent installations from `GET /api/v1/agent/installations`.
+
+No Electron watcher, file watching, folder selection implementation, session sync, activity timeline, report generation, export, sharing or public-page work was started.
+
+### Privacy decisions
+
+- Project UI renders only display name, provider, safe local alias, status, neutral recent-activity wording and privacy settings.
+- Agent UI renders only user-facing device label, OS family, agent version, status and neutral last-contact wording.
+- The UI does not render absolute paths, file contents, code diffs, token material, raw hostnames or stable machine identifiers.
+- Add-project, pause and revoke controls are visible affordances only in this subphase; mutation wiring remains deferred.
+- Legacy `/repos/*` flows are not used by the dashboard V1 project screens.
+
+### TDD and validation results
+
+- RED: dashboard tests were added first for project list, project empty state, project detail privacy controls and agent installation listing; they failed against the previous placeholder shell.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 20/20 tests after implementing the screens.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: initially failed because `DATABASE_URL` was not set in the shell.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, dashboard 20/20, agent/shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3B dashboard screens are complete locally and must remain green in the PR CI before merge. Phase 3C may start next, limited to user-controlled local agent/project selection foundations, and must still preserve the privacy model before any real collection is enabled.

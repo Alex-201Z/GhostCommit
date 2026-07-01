@@ -37,6 +37,30 @@ const emptyToday = {
   },
   canGenerateDraft: false,
 };
+const sampleProjects = [
+  {
+    id: 'project-1',
+    displayName: 'GhostCommit',
+    gitProvider: 'LOCAL',
+    localAlias: 'ghostcommit-dev',
+    branch: 'main',
+    trackingStatus: 'ACTIVE',
+    ignoredPatterns: ['dist/**', '.env*'],
+    includeFilePathsInReports: false,
+    excludedFromReports: false,
+    lastActivityAt: '2026-07-01T12:00:00.000Z',
+  },
+];
+const sampleInstallations = [
+  {
+    id: 'agent-1',
+    deviceLabel: 'Windows dev laptop',
+    osFamily: 'windows',
+    agentVersion: '0.1.0',
+    status: 'CONNECTED',
+    lastSeenAt: '2026-07-01T12:10:00.000Z',
+  },
+];
 
 function renderAt(path: string) {
   window.history.pushState({}, '', path);
@@ -250,6 +274,79 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
     expect(screen.getByText(body)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/repos|activity|reports|agent/i), expect.anything());
+  });
+
+  it('renders the projects page from the privacy-safe projects API and never displays absolute paths', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => sampleProjects });
+    renderAt('/app/projects');
+
+    expect(await screen.findByRole('heading', { name: /projets suivis/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ajouter un projet/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/rechercher un projet/i)).toBeInTheDocument();
+    expect(screen.getByText('GhostCommit')).toBeInTheDocument();
+    expect(screen.getByText(/actif/i)).toBeInTheDocument();
+    expect(screen.getByText(/ghostcommit-dev/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ouvrir ghostcommit/i })).toHaveAttribute('href', '/app/projects/project-1');
+    expect(document.body.textContent).not.toMatch(/C:\\|Users|\/home|absolute/i);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer short-lived-access-token' },
+    });
+  });
+
+  it('renders a useful projects empty state without activating collection', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+    renderAt('/app/projects');
+
+    expect(await screen.findByRole('heading', { name: /projets suivis/i })).toBeInTheDocument();
+    expect(screen.getByText(/ghostcommit ne suit aucun dossier avant votre autorisation/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /configurer l.agent/i })).toHaveAttribute('href', '/app/settings/agent');
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
+  });
+
+  it('renders project detail privacy controls without file contents or absolute paths', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => sampleProjects[0] });
+    renderAt('/app/projects/project-1');
+
+    expect(await screen.findByRole('heading', { name: /ghostcommit/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /aper/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /sessions/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /livrables/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /confidentialit/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /mettre le suivi en pause/i })).toBeInTheDocument();
+    expect(screen.getByText(/alias local/i)).toBeInTheDocument();
+    expect(screen.getByText(/ne pas inclure les chemins de fichiers dans les rapports/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/C:\\|Users|\/home|contenu de fichiers/i);
+  });
+
+  it('renders the agent settings page from installations without exposing token material', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => sampleInstallations });
+    renderAt('/app/settings/agent');
+
+    expect(await screen.findByRole('heading', { name: /agent local/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /t.l.charger \/ relancer l.agent/i })).toBeInTheDocument();
+    expect(screen.getByText(/windows dev laptop/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /r.voquer cet appareil/i })).toBeInTheDocument();
+    expect(document.body.textContent?.toLowerCase()).not.toMatch(/token|secret|hostname|machine/);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agent/installations', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer short-lived-access-token' },
+    });
   });
 
   it('renders the Today dashboard from the privacy-safe API without performance scoring', async () => {

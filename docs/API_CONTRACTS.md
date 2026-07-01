@@ -257,3 +257,44 @@ Sets `trackingStatus` to `ARCHIVED`, disables active tracking and records `archi
 - User A cannot read, update, pause, resume, archive or revoke User B resources.
 - Ignored patterns are stored as project privacy configuration for later agent filtering.
 - Existing legacy `/repos/*` prototype routes remain documented as legacy and must not be used by the dashboard V1 flow.
+
+## Phase 3B dashboard project and agent screens
+
+Phase 3B adds dashboard client routes for the Phase 3A backend surfaces. These routes are consent-gated, require the in-memory Bearer access token, and do not start collection by themselves.
+
+### `/app/projects`
+
+Reads `GET /projects` and renders the user's explicitly authorized projects.
+
+UI guarantees:
+
+- shows only project display name, provider, safe local alias, tracking status and neutral recent-activity wording;
+- never renders absolute paths, file contents, code diffs, hostnames, machine identifiers, tokens or secrets;
+- keeps project creation as a user-initiated button placeholder until the owning project-selection flow is implemented;
+- empty state links to `/app/settings/agent` and clearly states that no folder is tracked before authorization.
+
+### `/app/projects/:id`
+
+Reads `GET /projects/:id` and renders privacy controls for one owned project.
+
+UI guarantees:
+
+- displays safe project metadata and privacy settings only;
+- exposes pause/report controls as UI-only placeholders in this subphase;
+- does not call session, activity, report-generation, export or sharing APIs.
+
+### `/app/settings/agent`
+
+Reads `GET /agent/installations` and renders linked local agent installations.
+
+UI guarantees:
+
+- displays user-facing device label, OS family, agent version, status and neutral last-contact wording;
+- never displays token material, secrets, raw hostnames or stable machine identifiers;
+- download/relaunch and revoke controls are UI-only placeholders until their mutation flows are implemented.
+
+### Phase 3B invariants
+
+- No Electron watcher, file watching, session sync, report generation, export or sharing is enabled.
+- The dashboard uses `/projects/*` and `/agent/installations`, not legacy `/repos/*`.
+- The short-lived access token remains in React memory only.
