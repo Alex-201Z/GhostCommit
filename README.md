@@ -48,6 +48,7 @@ Le projet est organisé en monorepo avec trois composants principaux :
 GhostCommit/
 ├── backend/          # API NestJS + PostgreSQL + Prisma
 ├── agent/            # Agent desktop Electron
+├── dashboard/        # Dashboard React + TypeScript + Vite
 ├── shared/           # Types partagés
 ├── docker-compose.yml
 └── package.json
@@ -72,6 +73,15 @@ GhostCommit/
 **Infrastructure:**
 - Docker & Docker Compose
 - Node.js 18+
+
+## Parcours dashboard actuel
+
+La Phase 1B-A fournit les premières routes dashboard utilisables :
+
+- `/` : page publique privacy-first avec promesse produit, bénéfices et exemple statique de rapport.
+- `/login` : connexion GitHub via `POST /api/v1/auth/github/start`.
+- `/auth/callback` : finalisation de session via cookie HttpOnly et `POST /api/v1/auth/refresh`, sans token dans l'URL ni Web Storage.
+- `/app/*` : garde de route protégée minimale. Le shell applicatif complet reste prévu pour la Phase 1B-C.
 
 ## ✨ Fonctionnalités
 

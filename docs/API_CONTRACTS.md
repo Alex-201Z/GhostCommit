@@ -45,3 +45,29 @@ Requires `{ privacyPolicyAccepted: true, hasReadCollectionNotice: true, understa
 ## Legacy prototype routes
 
 GitHub/GitLab Passport initiation and token-in-query callbacks are disabled. Other prototype users, teams, repository, activity and summary routes remain development-only and retain the ownership warnings recorded by the audit; they were not expanded in Phase 1A.
+
+## Phase 1B-A dashboard routes
+
+These are dashboard client routes, not new backend endpoints.
+
+### `/`
+
+Public landing page explaining GhostCommit as a privacy-first proof-of-work tool. It includes the product promise, three benefits, privacy positioning, a static report example, and a CTA to `/login`.
+
+### `/login`
+
+Public authentication page. It checks for an existing refresh cookie with `POST /auth/refresh`; an already authenticated user is redirected to `/app`. Anonymous users can start GitHub OAuth through `POST /auth/github/start`. The dashboard renders the returned authorization URL as an explicit GitHub authorization link.
+
+### `/auth/callback`
+
+Dashboard callback landing page after the backend OAuth callback redirects back to the fixed dashboard URL. The page immediately removes query parameters from the browser URL, then calls `POST /auth/refresh` with credentials included. On success, it keeps the access token in memory only and redirects to `/app`. On failure, it shows a safe, generic error.
+
+### `/app/*`
+
+Protected client route guard only in Phase 1B-A. It attempts `POST /auth/refresh` and redirects anonymous users to `/login`. The full app shell is intentionally deferred to Phase 1B-C.
+
+## Dashboard token handling
+
+- Refresh tokens are transported only by the existing HttpOnly cookie.
+- Access tokens are not written to `localStorage`, `sessionStorage`, URL query parameters, or hash fragments.
+- OAuth `code`, `state`, provider errors and tokens are never echoed in UI errors.

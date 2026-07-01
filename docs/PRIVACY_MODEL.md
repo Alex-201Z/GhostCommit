@@ -53,3 +53,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The refresh cookie is HttpOnly and SameSite=Lax, limited to `/api/v1/auth`, and Secure in production.
 - Consent records contain the policy version, UTC acceptance timestamp and explicit source.
 - Consent and personal workspace creation do not authorize or activate activity collection. Tracking remains off until later explicit project authorization.
+
+## Phase 1B-A dashboard identity boundary
+
+- The public dashboard explains GhostCommit as proof-of-work software, not surveillance software.
+- The dashboard starts OAuth through the backend and never handles provider tokens directly.
+- The dashboard callback removes OAuth query parameters before completing the browser-side session refresh.
+- The short-lived access token exists only in React memory. It is not stored in `localStorage`, `sessionStorage`, query parameters, hash fragments, logs or rendered errors.
+- Login and callback errors use generic safe language and never echo OAuth `code`, `state`, provider payloads, access tokens or refresh tokens.

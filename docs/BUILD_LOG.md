@@ -106,3 +106,46 @@ Validation only. No Phase 1B UI, repository connection, agent, collection or rep
 ### Gate decision
 
 The Phase 1A PostgreSQL validation gate is closed on the PR branch. Phase 1A can be considered validated once the final documentation-only run remains green and the PR is merged into `main`. Phase 1B remains unstarted.
+
+## 2026-07-01 — Phase 1B-A public interface and login
+
+### Scope
+
+Public dashboard/login foundation only. No onboarding UI, app shell, repository connection, agent linking, activity collection, timeline, reporting or export work was started.
+
+### Implementation
+
+- Replaced the Phase 0 health page with real dashboard routes:
+  - `/` public landing page;
+  - `/login`;
+  - `/auth/callback`;
+  - `/app/*` protected route guard placeholder.
+- Added privacy-first product copy: proof-of-work positioning, three benefits, confidentiality section and a static private report example.
+- Connected the login page to the Phase 1A backend contract through `POST /api/v1/auth/github/start`.
+- Added dashboard-side session bootstrap through `POST /api/v1/auth/refresh` with credentials included.
+- Kept the short-lived access token in React memory only; no token is written to `localStorage`, `sessionStorage` or URL fragments.
+- The callback page removes query parameters before refreshing the browser session and uses a generic safe error message.
+- Added route guard behavior: anonymous `/app/*` users redirect to `/login`; connected `/login` users redirect to `/app`.
+- Added `vite/client` types to the dashboard TypeScript config for `import.meta.env`.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard` failed with 5/5 missing Phase 1B-A route expectations against the old Phase 0 health page.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 6/6 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: initially failed because `ImportMeta.env` was not typed; passed after adding `vite/client`.
+- `npm run build --workspace @ghostcommit/dashboard`: passed after the same type fix.
+- Full verification with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+  - `npm run db:generate`: passed.
+  - `npm run db:validate`: passed.
+  - `npm run lint`: passed.
+  - `npm run typecheck`: passed.
+  - `npm test`: passed; backend 2/2 and dashboard 6/6.
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+
+### Remaining risks
+
+- Real GitHub OAuth still requires external OAuth app credentials and callback configuration.
+- The protected `/app/*` target is intentionally only a guard placeholder; the real app shell belongs to Phase 1B-C.
+- The first `npm run db:validate` attempt without `DATABASE_URL` failed as expected in this shell; validation passes when the test database URL is provided, matching CI behavior.
