@@ -83,3 +83,13 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The dashboard displays only neutral counts and status labels. It does not compute or render productivity scores, rankings, performance judgments or motivation inference.
 - The response and UI must not include file contents, code diffs, absolute paths, hostnames, stable machine identifiers, secrets, provider payloads or tokens.
 - Demo data is local UI sample data only. It does not start collection, connect repositories, contact the agent, pause/resume tracking, stop sessions, generate reports, export or share anything.
+
+## Phase 3A project and agent backend boundary
+
+- Agent link requests accept only a user-facing device label, OS family and agent version. Raw hostname, machine identifiers, paths and secrets are rejected.
+- Agent tokens are generated server-side, returned only once during confirmation, and stored hash-only. Installation list/revoke responses never expose token material.
+- Revocation clears token material immediately and marks the installation `REVOKED`.
+- Projects are created only through authenticated explicit user action. The backend derives the personal workspace from the JWT and rejects client-provided ownership fields.
+- The project API stores a safe local alias rather than an absolute folder path. Drive roots, slashes, backslashes and absolute path-shaped values are rejected before persistence.
+- Project privacy settings include ignored patterns, optional exclusion from reports, and an option to omit file paths from future reports.
+- Phase 3A does not yet start the Electron agent watcher, sync activity sessions, read file contents, transmit file paths, generate reports, export data or share anything.

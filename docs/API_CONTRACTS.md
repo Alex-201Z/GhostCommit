@@ -183,3 +183,77 @@ Consent-gated dashboard routes rendering the Today overview:
 - getting-started checklist shows what still needs to be enabled.
 
 The demo button uses local sample data only. It does not call repository, agent, pause/resume, stop-session, report-generation, export or sharing APIs. Real mutation endpoints listed in the product specification remain deferred to their owning phases.
+
+## Phase 3A projects and local agent backend foundations
+
+### Agent routes
+
+All Phase 3A agent management routes require the authenticated user Bearer token. The caller is always derived from the JWT.
+
+#### `POST /agent/link-request`
+
+Creates a short-lived local agent link request and returns `{ linkCode, deepLink, expiresAt }`. Accepted request fields are limited to `deviceLabel`, `osFamily` (`windows`, `macos`, `linux`) and `agentVersion`. Raw hostname, machine identifier, absolute paths, tokens and secrets are rejected by DTO validation.
+
+#### `POST /agent/link/confirm`
+
+Consumes a valid, unexpired link code for the authenticated user and creates an `AgentInstallation`. Returns the public installation and a one-time `agentToken`. The token is hash-only at rest and is never returned by list/revoke endpoints.
+
+#### `GET /agent/installations`
+
+Lists only the authenticated user’s devices. The response excludes `tokenHash`, raw tokens, hostnames and machine identifiers.
+
+#### `POST /agent/installations/:id/revoke`
+
+Revokes only an installation owned by the authenticated user. Revocation sets status `REVOKED`, records `revokedAt`, and clears the stored token hash/expiry so new agent calls can no longer authenticate once agent-token guarded sync endpoints are introduced.
+
+### Project routes
+
+All Phase 3A project routes require the authenticated user Bearer token. The API derives the personal workspace from the JWT user and never accepts `teamId`, `userId` or owner fields from the client.
+
+#### `POST /projects`
+
+Creates a project only after explicit user action. Request:
+
+```json
+{
+  "displayName": "GhostCommit",
+  "gitProvider": "LOCAL",
+  "localAlias": "ghostcommit-dev",
+  "branch": "main",
+  "ignoredPatterns": ["dist/**", ".env*"]
+}
+```
+
+The API stores a safe local alias, not an absolute local path. `localAlias` rejects drive roots, slashes, backslashes and traversal-like path values. New projects default to `ACTIVE` because creation itself is the explicit authorization action.
+
+#### `GET /projects`
+
+Lists projects for the authenticated user’s personal workspace. Optional `status` may be `ACTIVE`, `PAUSED` or `ARCHIVED`.
+
+#### `GET /projects/:id`
+
+Returns a project only if it belongs to the authenticated user.
+
+#### `PATCH /projects/:id`
+
+Updates privacy settings such as `ignoredPatterns`, `includeFilePathsInReports` and `excludedFromReports`, plus safe display fields.
+
+#### `POST /projects/:id/pause`
+
+Sets `trackingStatus` to `PAUSED` and prevents active tracking for that project.
+
+#### `POST /projects/:id/resume`
+
+Sets `trackingStatus` back to `ACTIVE`.
+
+#### `POST /projects/:id/archive`
+
+Sets `trackingStatus` to `ARCHIVED`, disables active tracking and records `archivedAt`.
+
+### Phase 3A backend invariants
+
+- No project is created without an authenticated `POST /projects`.
+- No absolute path is accepted or returned.
+- User A cannot read, update, pause, resume, archive or revoke User B resources.
+- Ignored patterns are stored as project privacy configuration for later agent filtering.
+- Existing legacy `/repos/*` prototype routes remain documented as legacy and must not be used by the dashboard V1 flow.

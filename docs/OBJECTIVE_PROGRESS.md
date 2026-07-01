@@ -24,8 +24,8 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-A - Public interface and login | Complete | Public landing, GitHub login start, callback refresh, safe errors and route guards implemented, verified locally and committed. |
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
-| Phase 2 - Today dashboard | Complete locally | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented. Full local gate passed; commit pending. |
-| Phase 3 - Projects and agent linking | Not started | |
+| Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are implemented with contract/unit checks. PostgreSQL migration/e2e coverage is added but local execution is blocked by unavailable Docker/PostgreSQL; CI must validate before Phase 3A is considered fully closed. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -37,55 +37,41 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 0 repository foundations.
 - Phase 1A backend authentication and consent foundations.
 - Real PostgreSQL 16 CI gate for Phase 1A.
-- Phase 1B-A dashboard public/login foundation:
-  - public `/` landing page with privacy-first proof-of-work positioning;
-  - static private report example;
-  - `/login` route using `POST /api/v1/auth/github/start`;
-  - `/auth/callback` route that strips query parameters and refreshes via HttpOnly cookie;
-  - `/app/*` protected route guard that redirects anonymous users to `/login`;
-  - connected users on `/login` redirect into the authenticated flow;
-  - access token retained only in React memory.
-- Phase 1B-B onboarding UI:
-  - five-step privacy-first onboarding at `/onboarding`;
-  - two-column transparency screen: `GhostCommit peut utiliser` and `GhostCommit ne peut jamais utiliser`;
-  - mandatory collection notice and data-control confirmations;
-  - `GET /api/v1/onboarding/status` loading/error/resume handling;
-  - `PATCH /api/v1/onboarding/status` consent submission with Phase 1A DTO;
-  - `/app/*` guard redirects authenticated users without consent to onboarding;
-  - no collection, repository connection, agent linking, session creation or reporting activated.
-- Phase 1B-C app shell:
-  - protected `/app/*` shell after consent;
-  - responsive sidebar and keyboard-focusable navigation;
-  - header with current personal workspace;
-  - profile button and notifications area;
-  - permanent `Agent non installé — aucune activité collectée` status;
-  - useful empty states for `/app/projects`, `/app/activity`, `/app/reports`, `/app/settings`;
-  - no future product API calls for repositories, activity, reports or agent.
+- Phase 1B-A dashboard public/login foundation.
+- Phase 1B-B privacy-first onboarding UI.
+- Phase 1B-C consent-gated app shell.
 - Phase 2 Today dashboard:
   - authenticated read-only `GET /api/v1/dashboard/today`;
   - `/app` and `/app/today` render the Today dashboard after consent;
-  - header with current date and neutral day message;
-  - session card, daily draft card, neutral day activity counts, recent sessions and getting-started checklist;
-  - UI/demo coverage for active, paused, no-session, finished and agent-missing states;
+  - session card, daily draft card, neutral day counts, recent sessions and checklist;
   - no productivity score, ranking, file content, absolute path, hostname, token, collection activation, agent mutation, report generation, export or sharing.
+- Phase 3A backend foundations:
+  - authenticated `POST /api/v1/agent/link-request`;
+  - authenticated `POST /api/v1/agent/link/confirm`;
+  - authenticated `GET /api/v1/agent/installations`;
+  - authenticated `POST /api/v1/agent/installations/:id/revoke`;
+  - authenticated project create/list/detail/update/pause/resume/archive under `/api/v1/projects`;
+  - Prisma models for `AgentLinkRequest` and `AgentInstallation`;
+  - project tracking status and privacy settings on `Repo`;
+  - PostgreSQL e2e coverage added for ownership, absolute path rejection and agent revocation.
 
 ## Current technical decisions
 
 - The dashboard starts OAuth with `POST /api/v1/auth/github/start` and obtains an access token only through `POST /api/v1/auth/refresh`.
 - The dashboard must not store tokens in `localStorage`, `sessionStorage`, or URLs.
-- OAuth callback UI handles loading and safe error states without echoing provider `code`, `state`, tokens, secrets, or raw backend errors.
-- Phase 2 exposes a read-only Today summary before real activity exists. Real pause/resume, stop-session and report-generation mutations remain deferred to their owning phases.
 - Phase 2 demo data is local UI sample data only and must not contact future product APIs.
+- Phase 3A keeps the existing prototype `/repos/*` routes untouched for compatibility but introduces `/projects/*` as the V1 privacy-safe surface.
+- Local project authorization stores a safe alias, not a local absolute path. The Electron agent must keep the absolute path local-only in later subphases.
+- Agent link requests accept only non-identifying metadata. Agent tokens are one-time response values and hash-only at rest.
 
-## Important files modified in the current Phase 2 subphase
+## Important files modified in the current Phase 3A subphase
 
+- `backend/prisma/schema.prisma`
+- `backend/prisma/migrations/20260701_phase_3a_projects_agent_foundations/migration.sql`
 - `backend/src/app.module.ts`
-- `backend/src/dashboard/dashboard.controller.ts`
-- `backend/src/dashboard/dashboard.module.ts`
-- `backend/src/dashboard/dashboard.service.ts`
-- `backend/src/dashboard/dashboard.contract.spec.ts`
-- `dashboard/src/App.tsx`
-- `dashboard/src/App.test.tsx`
+- `backend/src/agent/*`
+- `backend/src/projects/*`
+- `backend/test/auth.e2e-spec.ts`
 - `docs/API_CONTRACTS.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/BUILD_LOG.md`
@@ -94,26 +80,16 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 
 ## Migrations
 
-No new migration planned for Phase 2.
+- `20260701_phase_3a_projects_agent_foundations`: adds agent link/install tables, agent/project status enums, local project provider, and project privacy fields.
 
 ## Risks
 
-- GitHub OAuth cannot be fully exercised locally without a configured provider app; dashboard tests mock backend HTTP contracts and CI validates backend behavior.
+- GitHub OAuth cannot be fully exercised locally without a configured provider app.
 - Real Today activity remains empty until later phases implement project authorization, agent linking, sessions and report generation.
-- The README still contains older prototype sections and should continue to be corrected progressively as each phase replaces unsafe flows.
+- Local PostgreSQL validation for Phase 3A is blocked until Docker Desktop/PostgreSQL is available; CI PostgreSQL 16 must validate the migration/e2e suite.
+- The Electron agent still contains prototype flows that can expose absolute paths/legacy token handling; they were not expanded in Phase 3A and must be replaced in later Phase 3 subphases before real collection is allowed.
 
 ## Tests executed
-
-Phase 1B-A, Phase 1B-B and Phase 1B-C were each verified locally before their commits. Detailed results are preserved in `docs/BUILD_LOG.md`.
-
-Phase 2 targeted checks on 2026-07-01:
-
-- RED: backend dashboard contract failed because `dashboard.controller` and `dashboard.service` did not exist.
-- RED: dashboard tests failed because `/app` still rendered the Phase 1B-C welcome/empty state instead of the Today dashboard.
-- `npm run test --workspace @ghostcommit/backend -- dashboard.contract.spec.ts --runInBand`: passed, 2/2 backend dashboard contract tests.
-- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed, 16/16 dashboard tests.
-- `npm run lint`: passed across all four workspaces.
-- `npm run typecheck`: passed across all four workspaces.
 
 Phase 2 full gate on 2026-07-01 with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
 
@@ -125,11 +101,24 @@ Phase 2 full gate on 2026-07-01 with `DATABASE_URL=postgresql://ghostcommit:ghos
 - `npm run build`: passed.
 - `git diff --check`: passed.
 
+Phase 3A checks on 2026-07-01:
+
+- RED: backend contract tests failed because agent/project controllers and DTOs did not exist.
+- `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts projects.contract.spec.ts --runInBand`: passed, 6/6.
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, dashboard 16/16, agent/shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `prisma migrate deploy` and `test:e2e` with `RUN_DATABASE_TESTS=true`: blocked locally because PostgreSQL is not reachable and Docker Desktop is not running.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
-- Real Today activity depends on later phases and must not be simulated as production data.
+- Docker Desktop/PostgreSQL local service is unavailable in this environment, blocking local migration/e2e execution for Phase 3A.
 
 ## Next exact task
 
-Commit Phase 2, then inspect Phase 3 without starting out-of-order work.
+Commit Phase 3A backend foundations, then validate the PostgreSQL migration/e2e suite in CI or in a local environment with PostgreSQL 16 before starting Phase 3B dashboard/agent UI.

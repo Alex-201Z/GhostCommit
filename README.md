@@ -76,6 +76,16 @@ GhostCommit/
 
 ## Parcours dashboard actuel
 
+### Fondations API Phase 3A
+
+La Phase 3A ajoute les fondations backend pour :
+
+- créer et confirmer une liaison agent locale avec code court (`POST /api/v1/agent/link-request`, `POST /api/v1/agent/link/confirm`) ;
+- lister et révoquer les installations agent de l’utilisateur (`GET /api/v1/agent/installations`, `POST /api/v1/agent/installations/:id/revoke`) ;
+- créer, lister, consulter, suspendre, reprendre et archiver des projets explicitement autorisés (`/api/v1/projects`).
+
+Ces routes restent privacy-first : pas de hostname brut, pas d’identifiant machine stable, pas de chemin absolu, pas de contenu de fichiers et pas de token agent exposé après la confirmation initiale.
+
 La Phase 1B-A fournit les premières routes dashboard utilisables :
 
 - `/` : page publique privacy-first avec promesse produit, bénéfices et exemple statique de rapport.

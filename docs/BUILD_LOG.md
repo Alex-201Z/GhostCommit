@@ -291,3 +291,50 @@ Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/
 ### Gate decision
 
 Phase 2 is complete locally. The Today dashboard is privacy-safe, read-only for real API data, and uses only local demo data for non-empty UI states. Phase 3 has not been started.
+
+## 2026-07-01 — Phase 3A backend projects and agent foundations
+
+### Scope
+
+Backend foundations for Phase 3 only:
+
+- local agent link request, confirmation, installation listing and revocation;
+- explicitly authorized project creation/list/detail/update/pause/resume/archive;
+- Prisma schema and migration for agent installations, agent link requests and project tracking settings.
+
+No dashboard project UI, agent Electron watcher rewrite, file watching activation, session synchronization, activity timeline, report generation, export or sharing was started.
+
+### Privacy decisions
+
+- Agent link requests accept only `deviceLabel`, `osFamily` and `agentVersion`.
+- DTO validation rejects raw hostnames, machine IDs, absolute paths and client-provided owner fields.
+- Agent tokens are returned only once on link confirmation and stored hash-only.
+- Revocation clears token hash/expiry and marks the installation `REVOKED`.
+- Project creation derives the personal workspace from the JWT user; clients cannot pass `teamId` or `userId`.
+- Projects store a safe `localAlias`, not an absolute local folder path.
+- Project privacy settings include ignored patterns, report path inclusion and report exclusion flags.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts projects.contract.spec.ts --runInBand` failed because `agent.controller`, `projects.controller` and DTOs did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts projects.contract.spec.ts --runInBand` passed with 6/6 tests.
+- PostgreSQL e2e scenarios were added to `backend/test/auth.e2e-spec.ts` for project ownership, absolute path rejection, agent linking, consumed-code replay, A/B revocation isolation and token hash clearing.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, dashboard 16/16, agent/shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+
+### Blocked local PostgreSQL verification
+
+Local `prisma migrate deploy` and `npm run test:e2e --workspace @ghostcommit/backend` could not run because PostgreSQL was not reachable and Docker Desktop was not running:
+
+- Prisma/Node connection check: `Can't reach database server at localhost:5432`.
+- `docker compose up -d postgres redis`: failed to connect to `dockerDesktopLinuxEngine`.
+
+The CI workflow still provisions PostgreSQL 16, runs `prisma migrate deploy`, sets `RUN_DATABASE_TESTS=true`, and executes backend e2e tests. Phase 3A requires that CI PostgreSQL run before treating the backend migration as fully validated.

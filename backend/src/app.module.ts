@@ -12,6 +12,8 @@ import { SummaryModule } from './summary/summary.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AgentModule } from './agent/agent.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     WorkspacesModule,
     OnboardingModule,
     DashboardModule,
+    AgentModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
