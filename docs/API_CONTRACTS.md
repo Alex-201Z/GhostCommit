@@ -112,3 +112,26 @@ to `PATCH /onboarding/status`.
 - `/onboarding` redirects anonymous users to `/login`.
 - Intermediate onboarding step progress may be stored locally as a non-sensitive step index. Tokens, OAuth parameters, file paths, project data, secrets and activity data are never stored there.
 - Finishing onboarding does not start the agent, connect repositories, create sessions, or activate collection.
+
+## Phase 1B-C dashboard app shell
+
+### `/app/*`
+
+Protected, consent-gated dashboard shell. It includes:
+
+- responsive sidebar navigation;
+- keyboard-focusable links;
+- header with current personal workspace name;
+- profile menu button placeholder;
+- non-intrusive notification area;
+- permanent agent status badge: `Agent non installé — aucune activité collectée`.
+
+Prepared routes:
+
+- `/app`
+- `/app/projects`
+- `/app/activity`
+- `/app/reports`
+- `/app/settings`
+
+The pages intentionally render useful empty states only. They do not call future repository, agent, activity, reporting, settings mutation, export or sharing APIs.

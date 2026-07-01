@@ -13,6 +13,14 @@ const incompleteOnboarding = {
   completedAt: null,
   user: { privacyConsents: [], personalWorkspace: { id: 'workspace-1', name: 'Dev workspace' } },
 };
+const completedOnboarding = {
+  currentStep: 'PRIVACY_ACCEPTED',
+  completedAt: '2026-07-01T10:00:00.000Z',
+  user: {
+    privacyConsents: [{ policyVersion: '2026-06-22' }],
+    personalWorkspace: { id: 'workspace-1', name: 'Dev workspace' },
+  },
+};
 
 function renderAt(path: string) {
   window.history.pushState({}, '', path);
@@ -195,5 +203,36 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/onboarding');
     });
+  });
+
+  it('renders the app shell with workspace, profile, notifications, keyboard navigation and permanent agent status', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding });
+    renderAt('/app');
+
+    expect(await screen.findByRole('banner')).toHaveTextContent('Dev workspace');
+    expect(screen.getByRole('navigation', { name: /navigation principale/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /aujourd’hui/i })).toHaveAttribute('href', '/app');
+    expect(screen.getByRole('link', { name: /projets/i })).toHaveAttribute('href', '/app/projects');
+    expect(screen.getByRole('button', { name: /profil dev/i })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Agent non installé — aucune activité collectée');
+    expect(screen.getByLabelText(/notifications/i)).toHaveTextContent(/aucune notification/i);
+  });
+
+  it.each([
+    ['/app/projects', /aucun projet connecté/i, /la connexion de repositories arrive dans une phase ultérieure/i],
+    ['/app/activity', /aucune activité collectée/i, /l’agent n’est pas installé/i],
+    ['/app/reports', /aucun rapport généré/i, /les rapports resteront privés/i],
+    ['/app/settings', /paramètres à venir/i, /confidentialité, pause, suppression et déconnexion/i],
+  ])('renders useful empty state for %s without calling future product APIs', async (path, heading, body) => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding });
+    renderAt(path);
+
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(screen.getByText(body)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/repos|activity|reports|agent/i), expect.anything());
   });
 });

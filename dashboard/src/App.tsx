@@ -513,21 +513,12 @@ function ProtectedRoute() {
   if (localStorage.getItem(ONBOARDING_COMPLETE_KEY) !== 'true') {
     return <RequireConsent accessToken={auth.accessToken} />;
   }
-  return (
-    <Surface>
-      <section className="my-auto rounded-3xl border border-slate-800 bg-slate-950/80 p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Phase 1B-C à venir</p>
-        <h1 className="mt-4 text-4xl font-semibold">Espace GhostCommit protégé</h1>
-        <p className="mt-4 max-w-2xl leading-7 text-slate-300">
-          Vous êtes connecté. Le shell applicatif complet reste volontairement hors périmètre de cette sous-phase.
-        </p>
-      </section>
-    </Surface>
-  );
+  return <AppShell user={auth.user} />;
 }
 
 function RequireConsent({ accessToken }: { accessToken: string }) {
   const [status, setStatus] = useState<'checking' | 'accepted' | 'missing' | 'error'>('checking');
+  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatusResponse | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -537,6 +528,7 @@ function RequireConsent({ accessToken }: { accessToken: string }) {
         if (!active) return;
         if (hasCompletedOnboarding(body)) {
           localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+          setOnboardingStatus(body);
           setStatus('accepted');
         } else {
           setStatus('missing');
@@ -554,17 +546,124 @@ function RequireConsent({ accessToken }: { accessToken: string }) {
   if (status === 'checking') return <LoadingPage label="Vérification du consentement…" />;
   if (status === 'missing') return <Navigate to="/onboarding" replace />;
   if (status === 'error') return <Navigate to="/login" replace />;
+  return <AppShell onboardingStatus={onboardingStatus} />;
+}
+
+function AppShell({
+  user,
+  onboardingStatus,
+}: {
+  user?: PublicUser;
+  onboardingStatus?: OnboardingStatusResponse | null;
+}) {
+  const location = useLocation();
+  const workspaceName = onboardingStatus?.user?.personalWorkspace?.name || 'Workspace personnel';
+  const displayName = user?.name || user?.username || 'Dev';
+  const page = shellPageFor(location.pathname);
+
   return (
-    <Surface>
-      <section className="my-auto rounded-3xl border border-slate-800 bg-slate-950/80 p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Phase 1B-C à venir</p>
-        <h1 className="mt-4 text-4xl font-semibold">Espace GhostCommit protégé</h1>
-        <p className="mt-4 max-w-2xl leading-7 text-slate-300">
-          Vous êtes connecté. Le shell applicatif complet reste volontairement hors périmètre de cette sous-phase.
-        </p>
-      </section>
-    </Surface>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <aside className="border-b border-slate-800 bg-slate-950/95 p-4 lg:w-72 lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-3 lg:block">
+            <Link to="/app" className="text-lg font-semibold">
+              GhostCommit
+            </Link>
+            <div role="status" className="rounded-full border border-amber-700/70 px-3 py-1 text-xs text-amber-200">
+              Agent non installé — aucune activité collectée
+            </div>
+          </div>
+          <nav className="mt-5 flex gap-2 overflow-x-auto lg:flex-col" aria-label="Navigation principale">
+            {[
+              ['Aujourd’hui', '/app'],
+              ['Projets', '/app/projects'],
+              ['Activité', '/app/activity'],
+              ['Rapports', '/app/reports'],
+              ['Paramètres', '/app/settings'],
+            ].map(([label, href]) => (
+              <Link
+                key={href}
+                to={href}
+                className="rounded-2xl px-4 py-3 text-sm font-medium text-slate-300 hover:bg-slate-900 hover:text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-emerald-300"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header role="banner" className="border-b border-slate-800 bg-slate-950/80 px-5 py-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Espace courant</p>
+                <p className="mt-1 text-xl font-semibold">{workspaceName}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div
+                  aria-label="Notifications"
+                  className="rounded-full border border-slate-800 px-4 py-2 text-sm text-slate-300"
+                >
+                  Aucune notification
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold hover:border-slate-400"
+                  aria-label={`Profil ${displayName}`}
+                >
+                  {displayName}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 p-5">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">{page.eyebrow}</p>
+              <h1 className="mt-3 text-3xl font-semibold">{page.heading}</h1>
+              <p className="mt-4 max-w-3xl leading-7 text-slate-300">{page.body}</p>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
   );
+}
+
+function shellPageFor(pathname: string) {
+  if (pathname.startsWith('/app/projects')) {
+    return {
+      eyebrow: 'Projets',
+      heading: 'Aucun projet connecté',
+      body: 'La connexion de repositories arrive dans une phase ultérieure. Aucun dossier local ou dépôt distant n’est suivi.',
+    };
+  }
+  if (pathname.startsWith('/app/activity')) {
+    return {
+      eyebrow: 'Activité',
+      heading: 'Aucune activité collectée',
+      body: 'L’agent n’est pas installé. Aucune session, aucun chemin et aucun signal local ne sont collectés.',
+    };
+  }
+  if (pathname.startsWith('/app/reports')) {
+    return {
+      eyebrow: 'Rapports',
+      heading: 'Aucun rapport généré',
+      body: 'Les rapports resteront privés par défaut et ne seront créés qu’après des phases dédiées avec validation humaine.',
+    };
+  }
+  if (pathname.startsWith('/app/settings')) {
+    return {
+      eyebrow: 'Paramètres',
+      heading: 'Paramètres à venir',
+      body: 'Confidentialité, pause, suppression et déconnexion seront ajoutées dans leurs phases prévues.',
+    };
+  }
+  return {
+    eyebrow: 'Aujourd’hui',
+    heading: 'Bienvenue dans votre espace GhostCommit',
+    body: 'Le shell est prêt. Agent non installé : aucune activité n’est collectée tant que vous ne l’autorisez pas dans une phase ultérieure.',
+  };
 }
 
 function LoadingPage({ label }: { label: string }) {

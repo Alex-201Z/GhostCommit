@@ -23,7 +23,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1A — Authentication and data foundations | Complete | GitHub OAuth, refresh rotation, personal workspace, consent foundations and PostgreSQL 16 CI validation are merged in `main`. |
 | Phase 1B-A — Public interface and login | Complete locally | Public landing, GitHub login start, callback refresh, safe errors and route guards implemented and verified locally. Commit pending. |
 | Phase 1B-B — Privacy-first onboarding UI | Complete locally | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented and verified locally. Commit pending. |
-| Phase 1B-C — App shell | Not started | Must wait for onboarding UI verification and commit. |
+| Phase 1B-C — App shell | Complete locally | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented and verified locally. Commit pending. |
 | Phase 2 — Today dashboard | Not started | |
 | Phase 3 — Projects and agent linking | Not started | |
 | Phase 4 — Sessions and timeline | Not started | |
@@ -53,6 +53,14 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - `PATCH /api/v1/onboarding/status` consent submission with Phase 1A DTO;
   - `/app/*` guard redirects authenticated users without consent to onboarding;
   - no collection, repository connection, agent linking, session creation or reporting activated.
+- Phase 1B-C app shell:
+  - protected `/app/*` shell after consent;
+  - responsive sidebar and keyboard-focusable navigation;
+  - header with current personal workspace;
+  - profile button and notifications area;
+  - permanent `Agent non installé — aucune activité collectée` status;
+  - useful empty states for `/app`, `/app/projects`, `/app/activity`, `/app/reports`, `/app/settings`;
+  - no future product API calls for repositories, activity, reports or agent.
 
 ## Current technical decisions
 
@@ -98,6 +106,22 @@ Phase 1B-A local checks on 2026-07-01:
   - `npm run build`: passed.
   - `git diff --check`: passed.
 
+Phase 1B-C local checks on 2026-07-01:
+
+- RED: dashboard tests failed because the protected app area still rendered the Phase 1B-C placeholder.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed, 14/14 dashboard tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+- Full gate with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+  - `npm run db:generate`: passed.
+  - `npm run db:validate`: passed.
+  - `npm run lint`: passed.
+  - `npm run typecheck`: passed.
+  - `npm test`: passed; backend 2/2 and dashboard 14/14.
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+
 Phase 1B-B local checks on 2026-07-01:
 
 - RED: dashboard tests failed because `/onboarding` was absent and `/app/*` did not enforce consent.
@@ -120,4 +144,4 @@ Phase 1B-B local checks on 2026-07-01:
 
 ## Next exact task
 
-Run the full repository gate for Phase 1B-B, commit it, then start Phase 1B-C app shell with failing route/accessibility tests.
+Run the full repository gate for Phase 1B-C, commit it, then inspect the specification for the next required phase without starting out-of-order work.

@@ -195,3 +195,44 @@ Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/
 - `npm test`: passed; backend 2/2 and dashboard 9/9.
 - `npm run build`: passed.
 - `git diff --check`: passed.
+
+## 2026-07-01 — Phase 1B-C app shell
+
+### Scope
+
+Protected dashboard shell and useful empty app routes only. No repository connection, agent installation/linking, project authorization, collection, sessions, reports, exports or settings mutations were started.
+
+### Implementation
+
+- Added the consent-gated `/app/*` shell after onboarding.
+- Added responsive sidebar navigation with keyboard-focusable links.
+- Added header with the current personal workspace name from onboarding status when available.
+- Added profile button placeholder and non-intrusive notification area.
+- Added permanent status badge: `Agent non installé — aucune activité collectée`.
+- Prepared useful empty states for:
+  - `/app`;
+  - `/app/projects`;
+  - `/app/activity`;
+  - `/app/reports`;
+  - `/app/settings`.
+- Verified the shell does not call future repository, activity, report or agent APIs.
+
+### TDD and validation results
+
+- RED: dashboard tests failed because the protected app area still rendered the Phase 1B-C placeholder and lacked shell roles/routes.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 14/14 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+
+### Full verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 2/2 and dashboard 14/14.
+- `npm run build`: passed.
+- `git diff --check`: passed.

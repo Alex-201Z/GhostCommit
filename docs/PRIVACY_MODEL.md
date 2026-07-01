@@ -69,3 +69,9 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The onboarding UI uses the Phase 1A consent endpoint and does not activate collection, agent linking, repository tracking, session creation, reporting, sharing or export.
 - Local persistence is limited to a non-sensitive onboarding step/completion marker. It must never contain tokens, OAuth parameters, file paths, project identifiers, secrets or activity payloads.
 - `/app/*` remains blocked for authenticated users until consent is present.
+
+## Phase 1B-C app shell boundary
+
+- The shell shows the agent as not installed by default: no activity is collected.
+- Empty states explain future capabilities without connecting repositories, starting the agent, creating sessions, generating reports or exporting data.
+- Navigation and profile controls are UI placeholders only until their owning phases implement real behavior.
