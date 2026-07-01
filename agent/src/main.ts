@@ -6,6 +6,7 @@ import { FileWatcher } from './services/fileWatcher';
 import { GitDetector } from './services/gitDetector';
 import { StorageService } from './services/storage';
 import { ActivityTracker } from './services/activityTracker';
+import { getStartupPolicy } from './services/startupPolicy';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -37,11 +38,13 @@ class GhostCommitAgent {
     // Create system tray
     this.createTray();
 
-    // Start watching configured paths
+    // Phase 3C privacy boundary: never start watching previous local paths
+    // automatically. A later explicit activation flow may opt into watching.
     const watchPaths = this.config.getWatchPaths();
-    if (watchPaths.length > 0) {
+    const startupPolicy = getStartupPolicy(watchPaths);
+    if (startupPolicy.shouldAutoWatchConfiguredPaths) {
       watchPaths.forEach((path) => this.fileWatcher.watchPath(path));
-    } else {
+    } else if (startupPolicy.shouldShowSetupPrompt) {
       // If no paths configured, show setup dialog
       this.showSetupDialog();
     }

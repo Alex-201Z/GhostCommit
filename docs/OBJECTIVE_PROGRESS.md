@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete locally and require green PR CI before merge. Next: Phase 3C local agent/project selection foundations. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -58,6 +58,13 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - `/app/projects` reads `GET /api/v1/projects` and shows safe aliases/status only;
   - `/app/projects/:id` reads `GET /api/v1/projects/:id` and shows privacy settings without file contents or absolute paths;
   - `/app/settings/agent` reads `GET /api/v1/agent/installations` without exposing token material, raw hostnames or stable machine identifiers.
+- Phase 3C local agent/project selection foundations:
+  - local project authorization drafts can be prepared only from Git repository folders;
+  - absolute local paths remain local-only and are never included in the backend project payload;
+  - default ignored patterns and safe user patterns are normalized before project creation;
+  - project payload creation requires explicit confirmation;
+  - agent startup no longer auto-watches previously configured paths;
+  - `ActivityTracker` no longer syncs pending sessions on construction.
 
 ## Current technical decisions
 
@@ -68,6 +75,8 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Local project authorization stores a safe alias, not a local absolute path. The Electron agent must keep the absolute path local-only in later subphases.
 - Agent link requests accept only non-identifying metadata. Agent tokens are one-time response values and hash-only at rest.
 - Phase 3B dashboard controls are read-only or UI-only affordances. Add-project, pause and revoke mutations remain deferred to their owning subphases.
+- Phase 3C keeps agent-side absolute paths local-only and treats `POST /projects` payloads as explicit-confirmation artifacts.
+- Existing agent session collection remains disabled by default; future sync must opt in only after payload redaction, relative path validation and agent-token authorization are implemented.
 
 ## Important files modified in the current Phase 3B subphase
 
@@ -78,6 +87,20 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `docs/BUILD_LOG.md`
 - `docs/OBJECTIVE_PROGRESS.md`
 - `README.md`
+
+## Important files modified in the current Phase 3C subphase
+
+- `agent/src/services/projectSelection.ts`
+- `agent/src/services/projectSelection.test.ts`
+- `agent/src/services/startupPolicy.ts`
+- `agent/src/services/startupPolicy.test.ts`
+- `agent/src/services/activityTracker.ts`
+- `agent/src/services/activityTracker.test.ts`
+- `agent/src/main.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/BUILD_LOG.md`
+- `docs/OBJECTIVE_PROGRESS.md`
 
 ## Migrations
 
@@ -90,6 +113,8 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Local PostgreSQL validation was blocked by unavailable Docker/PostgreSQL, so Phase 3A was validated in GitHub Actions PostgreSQL 16 instead.
 - The Electron agent still contains prototype flows that can expose absolute paths/legacy token handling; they were not expanded in Phase 3A and must be replaced in later Phase 3 subphases before real collection is allowed.
 - Phase 3B dashboard buttons for add-project, pause and revoke are not wired to mutations yet; this is intentional until the next owning subphase defines safe local/user-control flows.
+- Phase 3C does not yet connect the project authorization draft to a rendered Electron UI or backend mutation; that remains a follow-up inside Phase 3 after the local privacy primitives are verified.
+- `ActivityTracker` can still build unsafe legacy session payloads if future code opts into it before the Phase 4 filtering rewrite; keep sync disabled until that work lands.
 
 ## Tests executed
 
@@ -139,6 +164,23 @@ Phase 3B checks on 2026-07-01:
 - `npm run build`: passed.
 - `git diff --check`: passed with CRLF warnings only.
 
+Phase 3C targeted checks on 2026-07-02:
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts` failed because `projectSelection` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts`: passed, 4/4.
+- RED: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts` failed because `ActivityTracker` synchronized one pending session on construction.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts projectSelection.test.ts`: passed, 5/5.
+- RED: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts` failed because `startupPolicy` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts activityTracker.test.ts projectSelection.test.ts`: passed, 7/7.
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 20/20, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+- GitHub Actions CI run `28553173127` on PR #5: passed with PostgreSQL 16, `npm ci --ignore-scripts`, migration deploy, lint, typecheck, unit tests, PostgreSQL e2e and build.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -146,4 +188,4 @@ Phase 3B checks on 2026-07-01:
 
 ## Next exact task
 
-Start Phase 3C local agent/project selection foundations with TDD, without enabling unattended collection or transmitting absolute paths/file contents.
+Start the next Phase 3 subphase: wire an explicit user-controlled project authorization flow between the dashboard/agent foundations and `POST /projects`, without starting file watching, session sync, heartbeat-dependent collection or Phase 4.

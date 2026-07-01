@@ -101,3 +101,13 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - `/app/settings/agent` reads linked installations without rendering token material, raw hostnames or stable machine identifiers.
 - Add-project, pause and revoke controls are visible as user-control affordances only; their mutation flows remain deferred to later owning subphases.
 - Phase 3B does not start the Electron watcher, connect a local folder, sync sessions, generate reports, export or share data.
+
+## Phase 3C local agent/project selection boundary
+
+- The agent can prepare a local project authorization draft only for a Git repository folder selected by the user.
+- The absolute local root path remains local-only in the draft and is not part of the backend project payload.
+- The project payload contains only a display name, `LOCAL` provider, safe local alias, optional branch and filtered ignored patterns.
+- The agent refuses to turn non-Git personal folders into authorization drafts.
+- The agent does not automatically watch previously configured paths at startup.
+- `ActivityTracker` does not automatically synchronize pending sessions when constructed; later session sync must opt in explicitly after the owning phase adds safe payload filtering and agent-token validation.
+- This phase still does not transmit file contents, code diffs, absolute paths, raw hostnames, machine identifiers, tokens, secrets or activity sessions.

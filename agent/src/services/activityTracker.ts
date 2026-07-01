@@ -12,6 +12,10 @@ export interface ActiveSession {
   repoPath: string | null;
 }
 
+export interface ActivityTrackerOptions {
+  syncOnStart?: boolean;
+}
+
 export class ActivityTracker extends EventEmitter {
   private fileWatcher: FileWatcher;
   private gitDetector: GitDetector;
@@ -28,6 +32,7 @@ export class ActivityTracker extends EventEmitter {
     gitDetector: GitDetector,
     apiClient: ApiClient,
     storage: StorageService,
+    options: ActivityTrackerOptions = {},
   ) {
     super();
     this.fileWatcher = fileWatcher;
@@ -36,7 +41,9 @@ export class ActivityTracker extends EventEmitter {
     this.storage = storage;
 
     this.setupListeners();
-    this.startSyncInterval();
+    if (options.syncOnStart === true) {
+      this.startSyncInterval();
+    }
   }
 
   private setupListeners(): void {

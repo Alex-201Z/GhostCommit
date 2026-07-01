@@ -461,3 +461,16 @@ La Phase 3B ajoute les ecrans dashboard consent-gated suivants, sans activer la 
 - `/app/settings/agent` : liste les installations agent via `GET /api/v1/agent/installations`, sans token, hostname brut ni identifiant machine stable.
 
 Cette phase ne demarre pas l'agent Electron, la surveillance de fichiers, la synchronisation de sessions, la generation de rapports, l'export ou le partage.
+
+## Fondations agent Phase 3C
+
+La Phase 3C ajoute des fondations locales cote agent pour preparer une selection de projet sans demarrer la collecte :
+
+- un dossier ne peut devenir un brouillon d'autorisation que s'il s'agit d'un repository Git ;
+- le chemin absolu reste local-only et n'est jamais present dans le payload `POST /projects` ;
+- le payload projet contient uniquement nom affiche, provider `LOCAL`, alias safe et patterns ignores filtres ;
+- la creation du payload exige une confirmation explicite ;
+- l'agent ne surveille plus automatiquement les chemins deja configures au demarrage ;
+- `ActivityTracker` ne synchronise plus de sessions en attente des sa construction.
+
+Cette phase ne branche pas encore l'UI Electron de selection, le heartbeat, la synchronisation de sessions, la timeline, les rapports, l'export ou le partage.

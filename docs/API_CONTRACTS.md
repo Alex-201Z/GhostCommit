@@ -298,3 +298,30 @@ UI guarantees:
 - No Electron watcher, file watching, session sync, report generation, export or sharing is enabled.
 - The dashboard uses `/projects/*` and `/agent/installations`, not legacy `/repos/*`.
 - The short-lived access token remains in React memory only.
+
+## Phase 3C local agent/project selection foundations
+
+Phase 3C adds local-only agent foundations for preparing a project authorization request. It does not introduce a new backend endpoint and does not activate activity collection.
+
+### Local authorization draft
+
+The Electron agent can create a local authorization draft from a user-selected Git repository folder. The draft keeps the absolute `localRootPath` inside the agent process only and exposes a safe `apiPayload` compatible with `POST /projects`:
+
+```json
+{
+  "displayName": "ghostcommit",
+  "gitProvider": "LOCAL",
+  "localAlias": "ghostcommit",
+  "ignoredPatterns": [".git/**", "node_modules/**", "dist/**", "build/**", ".next/**", "coverage/**", ".env*"]
+}
+```
+
+The agent must call `toCreateProjectPayload(..., { confirmed: true })` after explicit user confirmation before sending the payload to the backend.
+
+### Phase 3C invariants
+
+- Previously configured local paths are not watched automatically at agent startup.
+- Pending sessions are not synchronized automatically when `ActivityTracker` is constructed.
+- Non-Git folders cannot become project authorization drafts.
+- The API payload never includes absolute paths, parent directory paths, file contents, code diffs, hostnames, machine identifiers, tokens or secrets.
+- User-provided ignored patterns are filtered locally before they can enter the project payload.

@@ -402,3 +402,71 @@ No Electron watcher, file watching, folder selection implementation, session syn
 ### Gate decision
 
 Phase 3B dashboard screens are complete locally and must remain green in the PR CI before merge. Phase 3C may start next, limited to user-controlled local agent/project selection foundations, and must still preserve the privacy model before any real collection is enabled.
+
+## 2026-07-02 — Phase 3C local agent/project selection foundations
+
+### Scope
+
+Agent-side foundations for explicit local project selection only:
+
+- prepare a local authorization draft from a user-selected Git repository folder;
+- keep the absolute local root path local-only;
+- produce a backend-compatible safe `POST /projects` payload only after explicit confirmation;
+- normalize default and user-provided ignored patterns before project creation;
+- prevent automatic watching of previously configured paths at agent startup;
+- prevent automatic pending-session sync when `ActivityTracker` is constructed.
+
+No Electron onboarding UI, backend mutation wiring, heartbeat, session synchronization, activity timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Non-Git folders are rejected so arbitrary personal directories cannot become project drafts.
+- The project payload includes display name, `LOCAL` provider, safe alias, optional branch and ignored patterns only.
+- Absolute paths, parent directory paths, file contents, code diffs, raw hostnames, stable machine identifiers, token material and secrets are not included in the payload.
+- Legacy `ActivityTracker` sync is opt-in only after this phase; future code must not enable it until session payload filtering and API revalidation are implemented.
+- Existing configured local paths are not auto-watched on startup; user action remains required before any future collection activation.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts` failed because `projectSelection` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts` passed with 4/4 tests.
+- RED: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts` failed because constructing `ActivityTracker` synchronized one pending session.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts projectSelection.test.ts` passed with 5/5 tests.
+- RED: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts` failed because `startupPolicy` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts activityTracker.test.ts projectSelection.test.ts` passed with 7/7 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 20/20, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### GitHub Actions validation
+
+Phase 3C was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28553173127
+- Job: https://github.com/Alex-201Z/GhostCommit/actions/runs/28553173127/job/84654798264
+- Head SHA before documentation amend: `2f1bb77`.
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### Gate decision
+
+Phase 3C local foundations are validated locally and in GitHub Actions PostgreSQL CI. The next Phase 3 subphase may wire the explicit user-controlled project authorization flow, but Phase 4 must not start from this state.
