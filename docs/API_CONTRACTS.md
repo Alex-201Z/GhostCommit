@@ -135,3 +135,51 @@ Prepared routes:
 - `/app/settings`
 
 The pages intentionally render useful empty states only. They do not call future repository, agent, activity, reporting, settings mutation, export or sharing APIs.
+
+## Phase 2 Today dashboard
+
+### `GET /dashboard/today`
+
+Requires a Bearer access token. Returns a privacy-safe overview for the authenticated user’s current day.
+
+Current Phase 2 implementation is read-only and returns the empty/not-installed state until later phases create real agent, project, session and report data:
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "agentStatus": "NOT_INSTALLED",
+  "session": { "state": "AGENT_NOT_CONNECTED" },
+  "draft": { "status": "NOT_GENERATED", "preview": [] },
+  "activity": {
+    "totalSessions": 0,
+    "projectsTouched": 0,
+    "commitsDetected": 0,
+    "workItemsOrBlockers": 0
+  },
+  "recentSessions": [],
+  "checklist": {
+    "accountCreated": true,
+    "agentLinked": false,
+    "firstProjectTracked": false,
+    "firstSessionSynced": false,
+    "firstDraftGenerated": false
+  },
+  "canGenerateDraft": false
+}
+```
+
+The response must not contain productivity scores, rankings, absolute paths, hostnames, stable machine identifiers, file contents, tokens or secrets.
+
+### `/app` and `/app/today`
+
+Consent-gated dashboard routes rendering the Today overview:
+
+- header with current date and the neutral message `Voici votre activité de développement du jour`;
+- permanent agent-not-installed status remains visible in the shell;
+- session card supports the five Phase 2 states in UI/demo mode;
+- daily draft card supports `NOT_GENERATED`, `NEEDS_REVIEW` and `VALIDATED`;
+- day activity counters are neutral counts only, never evaluative scores;
+- recent sessions list is limited to five items;
+- getting-started checklist shows what still needs to be enabled.
+
+The demo button uses local sample data only. It does not call repository, agent, pause/resume, stop-session, report-generation, export or sharing APIs. Real mutation endpoints listed in the product specification remain deferred to their owning phases.

@@ -82,7 +82,8 @@ La Phase 1B-A fournit les premières routes dashboard utilisables :
 - `/login` : connexion GitHub via `POST /api/v1/auth/github/start`.
 - `/auth/callback` : finalisation de session via cookie HttpOnly et `POST /api/v1/auth/refresh`, sans token dans l'URL ni Web Storage.
 - `/onboarding` : parcours privacy-first en cinq étapes, relié à `GET/PATCH /api/v1/onboarding/status`.
-- `/app/*` : shell protégé avec navigation, workspace courant, profil, notifications, statut permanent `Agent non installé — aucune activité collectée` et états vides utiles.
+- `/app` et `/app/today` : tableau Aujourd’hui consent-gated, alimenté par `GET /api/v1/dashboard/today`, avec état agent non installé, session actuelle, brouillon du jour, compteurs neutres, dernières sessions, checklist et données de démonstration locales.
+- `/app/projects`, `/app/activity`, `/app/reports`, `/app/settings` : shell protégé avec navigation, workspace courant, profil, notifications, statut permanent `Agent non installé — aucune activité collectée` et états vides utiles.
 
 ## ✨ Fonctionnalités
 

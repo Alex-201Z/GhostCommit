@@ -28,6 +28,49 @@ type OnboardingStatusResponse = {
   };
 };
 
+type TodaySummary = {
+  date: string;
+  agentStatus: 'NOT_INSTALLED' | 'CONNECTED' | 'PAUSED' | 'OFFLINE';
+  session: {
+    state:
+      | 'AGENT_NOT_CONNECTED'
+      | 'TRACKING_PAUSED'
+      | 'NO_SESSION_TODAY'
+      | 'ACTIVE_SESSION'
+      | 'FINISHED_SESSION';
+    project?: string;
+    startedAt?: string;
+    pausedAt?: string;
+    durationMinutes?: number;
+    filteredFilesCount?: number;
+  };
+  draft: {
+    status: 'NOT_GENERATED' | 'NEEDS_REVIEW' | 'VALIDATED';
+    preview: string[];
+  };
+  activity: {
+    totalSessions: number;
+    projectsTouched: number;
+    commitsDetected: number;
+    workItemsOrBlockers: number;
+  };
+  recentSessions: Array<{
+    id: string;
+    time: string;
+    project: string;
+    durationMinutes: number;
+    syncState: 'SYNCED' | 'PENDING' | 'FAILED';
+  }>;
+  checklist: {
+    accountCreated: boolean;
+    agentLinked: boolean;
+    firstProjectTracked: boolean;
+    firstSessionSynced: boolean;
+    firstDraftGenerated: boolean;
+  };
+  canGenerateDraft: boolean;
+};
+
 type AuthState =
   | { status: 'checking'; accessToken: null; user: null }
   | { status: 'anonymous'; accessToken: null; user: null }
@@ -513,7 +556,7 @@ function ProtectedRoute() {
   if (localStorage.getItem(ONBOARDING_COMPLETE_KEY) !== 'true') {
     return <RequireConsent accessToken={auth.accessToken} />;
   }
-  return <AppShell user={auth.user} />;
+  return <AppShell accessToken={auth.accessToken} user={auth.user} />;
 }
 
 function RequireConsent({ accessToken }: { accessToken: string }) {
@@ -546,13 +589,15 @@ function RequireConsent({ accessToken }: { accessToken: string }) {
   if (status === 'checking') return <LoadingPage label="Vérification du consentement…" />;
   if (status === 'missing') return <Navigate to="/onboarding" replace />;
   if (status === 'error') return <Navigate to="/login" replace />;
-  return <AppShell onboardingStatus={onboardingStatus} />;
+  return <AppShell accessToken={accessToken} onboardingStatus={onboardingStatus} />;
 }
 
 function AppShell({
+  accessToken,
   user,
   onboardingStatus,
 }: {
+  accessToken: string;
   user?: PublicUser;
   onboardingStatus?: OnboardingStatusResponse | null;
 }) {
@@ -560,6 +605,7 @@ function AppShell({
   const workspaceName = onboardingStatus?.user?.personalWorkspace?.name || 'Workspace personnel';
   const displayName = user?.name || user?.username || 'Dev';
   const page = shellPageFor(location.pathname);
+  const isToday = location.pathname === '/app' || location.pathname.startsWith('/app/today');
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -618,16 +664,395 @@ function AppShell({
           </header>
 
           <main className="flex-1 p-5">
-            <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">{page.eyebrow}</p>
-              <h1 className="mt-3 text-3xl font-semibold">{page.heading}</h1>
-              <p className="mt-4 max-w-3xl leading-7 text-slate-300">{page.body}</p>
-            </section>
+            {isToday ? (
+              <TodayDashboard accessToken={accessToken} />
+            ) : (
+              <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">{page.eyebrow}</p>
+                <h1 className="mt-3 text-3xl font-semibold">{page.heading}</h1>
+                <p className="mt-4 max-w-3xl leading-7 text-slate-300">{page.body}</p>
+              </section>
+            )}
           </main>
         </div>
       </div>
     </div>
   );
+}
+
+const demoToday: TodaySummary = {
+  date: '2026-07-01',
+  agentStatus: 'PAUSED',
+  session: {
+    state: 'ACTIVE_SESSION',
+    project: 'GhostCommit',
+    startedAt: '09:12',
+    filteredFilesCount: 12,
+  },
+  draft: {
+    status: 'NEEDS_REVIEW',
+    preview: [
+      'Préparé le tableau de bord Aujourd’hui avec états vides.',
+      'Gardé les actions de suivi en mode local tant que l’agent n’est pas livré.',
+    ],
+  },
+  activity: {
+    totalSessions: 3,
+    projectsTouched: 1,
+    commitsDetected: 2,
+    workItemsOrBlockers: 1,
+  },
+  recentSessions: [
+    { id: 'demo-1', time: '09:12', project: 'GhostCommit', durationMinutes: 95, syncState: 'SYNCED' },
+    { id: 'demo-2', time: '11:30', project: 'GhostCommit', durationMinutes: 25, syncState: 'PENDING' },
+  ],
+  checklist: {
+    accountCreated: true,
+    agentLinked: true,
+    firstProjectTracked: true,
+    firstSessionSynced: true,
+    firstDraftGenerated: false,
+  },
+  canGenerateDraft: true,
+};
+
+function TodayDashboard({ accessToken }: { accessToken: string }) {
+  const [summary, setSummary] = useState<TodaySummary | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [showDemoStates, setShowDemoStates] = useState(false);
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadToday() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/dashboard/today`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: authHeaders(accessToken),
+        });
+        if (!response.ok) throw new Error('Unable to load today dashboard');
+        const body = await parseJson<TodaySummary>(response);
+        if (!active) return;
+        setSummary(body);
+        setState('ready');
+      } catch {
+        if (active) setState('error');
+      }
+    }
+    void loadToday();
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  const visibleSummary = summary;
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
+              {visibleSummary?.date || 'Aujourd’hui'}
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold">Aujourd’hui</h1>
+            <p className="mt-4 max-w-3xl leading-7 text-slate-300">
+              Voici votre activité de développement du jour.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setShowDemoStates((current) => !current)}
+              className="rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold hover:border-emerald-400"
+            >
+              {showDemoStates ? 'Masquer les données de démonstration' : 'Utiliser des données de démonstration'}
+            </button>
+            <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
+              {primaryAgentAction(visibleSummary?.agentStatus)}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {state === 'loading' && !visibleSummary ? (
+        <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">
+          Chargement du résumé du jour…
+        </p>
+      ) : null}
+      {state === 'error' && !visibleSummary ? (
+        <p role="alert" className="rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-amber-100">
+          Impossible de charger le résumé. Aucune collecte locale n’est déclenchée.
+        </p>
+      ) : null}
+
+      {visibleSummary ? (
+        <>
+          <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+            <SessionCard summary={visibleSummary} onPause={() => setPauseDialogOpen(true)} />
+            <DraftCard summary={visibleSummary} />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <ActivityCard summary={visibleSummary} />
+            <RecentSessionsCard summary={visibleSummary} />
+          </div>
+          <ChecklistCard summary={visibleSummary} />
+          {showDemoStates ? <DemoSessionStates onPause={() => setPauseDialogOpen(true)} /> : null}
+        </>
+      ) : null}
+
+      {pauseDialogOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pause-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5"
+        >
+          <section className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-950 p-6 shadow-2xl">
+            <h2 id="pause-dialog-title" className="text-2xl font-semibold">
+              Confirmer la pause
+            </h2>
+            <p className="mt-3 text-slate-300">
+              La pause reste sous votre contrôle. Cette démonstration ne contacte pas l’agent local.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPauseDialogOpen(false)}
+                className="rounded-full border border-slate-700 px-4 py-2"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => setPauseDialogOpen(false)}
+                className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950"
+              >
+                Confirmer
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SessionCard({ summary, onPause }: { summary: TodaySummary; onPause: () => void }) {
+  const session = sessionCopy(summary);
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="text-2xl font-semibold">Session actuelle</h2>
+      <p className="mt-3 text-lg font-medium text-emerald-200">{session.title}</p>
+      <p className="mt-3 leading-7 text-slate-300">{session.body}</p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        {summary.session.state === 'AGENT_NOT_CONNECTED' ? (
+          <>
+            <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+              Installer l’agent
+            </button>
+            <Link to="/app/settings" className="rounded-full border border-slate-700 px-4 py-2 hover:border-slate-400">
+              Pourquoi un agent local ?
+            </Link>
+          </>
+        ) : null}
+        {summary.session.state === 'TRACKING_PAUSED' ? (
+          <>
+            <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+              Reprendre le suivi
+            </button>
+            <button type="button" className="rounded-full border border-slate-700 px-4 py-2">
+              Voir les données collectées
+            </button>
+          </>
+        ) : null}
+        {summary.session.state === 'NO_SESSION_TODAY' ? (
+          <button type="button" className="rounded-full border border-slate-700 px-4 py-2">
+            Ajouter une note manuelle
+          </button>
+        ) : null}
+        {summary.session.state === 'ACTIVE_SESSION' ? (
+          <>
+            <button type="button" onClick={onPause} className="rounded-full border border-slate-700 px-4 py-2">
+              Mettre en pause
+            </button>
+            <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+              Terminer ma journée
+            </button>
+          </>
+        ) : null}
+        {summary.session.state === 'FINISHED_SESSION' ? (
+          <Link to="/app/activity" className="rounded-full border border-slate-700 px-4 py-2">
+            Voir la session
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function DraftCard({ summary }: { summary: TodaySummary }) {
+  const status = draftStatusLabel(summary.draft.status);
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="text-2xl font-semibold">Brouillon du jour</h2>
+      <p className="mt-3 text-lg font-medium text-emerald-200">{status}</p>
+      {summary.draft.preview.length ? (
+        <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-300">
+          {summary.draft.preview.slice(0, 3).map((line) => (
+            <li key={line}>• {line}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-slate-300">
+          Aucun brouillon privé n’est disponible tant qu’une session ou une note n’a pas été créée.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={!summary.canGenerateDraft}
+        className="mt-5 rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Générer le brouillon
+      </button>
+    </section>
+  );
+}
+
+function ActivityCard({ summary }: { summary: TodaySummary }) {
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="text-2xl font-semibold">Activité du jour</h2>
+      <div className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <Metric label={`${summary.activity.totalSessions} sessions`} />
+        <Metric label={`${summary.activity.projectsTouched} projets`} />
+        <Metric label={`${summary.activity.commitsDetected} commits`} />
+        <Metric label={`${summary.activity.workItemsOrBlockers} livrables ou blocages`} />
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label }: { label: string }) {
+  return <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 font-semibold">{label}</div>;
+}
+
+function RecentSessionsCard({ summary }: { summary: TodaySummary }) {
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="text-2xl font-semibold">Dernières sessions</h2>
+      {summary.recentSessions.length ? (
+        <ul className="mt-4 divide-y divide-slate-800">
+          {summary.recentSessions.slice(0, 5).map((session) => (
+            <li key={session.id} className="py-3">
+              <Link to="/app/activity" className="flex flex-wrap items-center justify-between gap-3 hover:text-emerald-200">
+                <span>
+                  {session.time} · {session.project} · {session.durationMinutes} min
+                </span>
+                <span className="text-sm text-slate-400">{syncStateLabel(session.syncState)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-slate-300">Aucune session synchronisée.</p>
+      )}
+    </section>
+  );
+}
+
+function ChecklistCard({ summary }: { summary: TodaySummary }) {
+  const items = [
+    ['Compte créé', summary.checklist.accountCreated],
+    ['Agent lié', summary.checklist.agentLinked],
+    ['Premier projet choisi', summary.checklist.firstProjectTracked],
+    ['Première session synchronisée', summary.checklist.firstSessionSynced],
+    ['Premier brouillon généré', summary.checklist.firstDraftGenerated],
+  ] as const;
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="text-2xl font-semibold">Checklist de démarrage</h2>
+      <ul className="mt-4 grid gap-3 md:grid-cols-2">
+        {items.map(([label, done]) => (
+          <li key={label} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+            {done ? '✓' : '○'} {label}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function DemoSessionStates({ onPause }: { onPause: () => void }) {
+  const states: TodaySummary[] = [
+    { ...demoToday, session: { ...demoToday.session, state: 'ACTIVE_SESSION' } },
+    { ...demoToday, session: { state: 'TRACKING_PAUSED', pausedAt: '10:40' } },
+    { ...demoToday, session: { state: 'NO_SESSION_TODAY' } },
+    { ...demoToday, session: { state: 'FINISHED_SESSION', project: 'GhostCommit', durationMinutes: 95 } },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-emerald-900/70 bg-emerald-950/10 p-6">
+      <h2 className="text-2xl font-semibold">États de session démontrés</h2>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {states.map((item) => (
+          <SessionCard key={item.session.state} summary={item} onPause={onPause} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function sessionCopy(summary: TodaySummary) {
+  switch (summary.session.state) {
+    case 'TRACKING_PAUSED':
+      return {
+        title: 'Suivi en pause',
+        body: `Pause active${summary.session.pausedAt ? ` depuis ${summary.session.pausedAt}` : ''}. Vous pouvez reprendre quand vous voulez.`,
+      };
+    case 'NO_SESSION_TODAY':
+      return {
+        title: 'Aucune session aujourd’hui',
+        body: 'Rien à signaler pour le moment. Vous pouvez ajouter une note manuelle si votre journée a commencé hors agent.',
+      };
+    case 'ACTIVE_SESSION':
+      return {
+        title: 'Session active',
+        body: `${summary.session.project || 'Projet choisi'} · début ${summary.session.startedAt || 'inconnu'} · ${
+          summary.session.filteredFilesCount || 0
+        } fichiers filtrés.`,
+      };
+    case 'FINISHED_SESSION':
+      return {
+        title: 'Session terminée',
+        body: `${summary.session.project || 'Dernier projet'} · ${summary.session.durationMinutes || 0} min enregistrées.`,
+      };
+    case 'AGENT_NOT_CONNECTED':
+    default:
+      return {
+        title: 'Agent non connecté',
+        body: 'Installez l’agent local plus tard pour collecter uniquement les signaux de projets que vous choisissez.',
+      };
+  }
+}
+
+function draftStatusLabel(status: TodaySummary['draft']['status']) {
+  if (status === 'NEEDS_REVIEW') return 'À relire';
+  if (status === 'VALIDATED') return 'Validé';
+  return 'Pas encore généré';
+}
+
+function syncStateLabel(state: TodaySummary['recentSessions'][number]['syncState']) {
+  if (state === 'PENDING') return 'Synchronisation en attente';
+  if (state === 'FAILED') return 'Synchronisation à vérifier';
+  return 'Synchronisé';
+}
+
+function primaryAgentAction(status?: TodaySummary['agentStatus']) {
+  if (status === 'PAUSED') return 'Reprendre le suivi';
+  if (status === 'CONNECTED') return 'Nouvelle note';
+  return 'Installer l’agent';
 }
 
 function shellPageFor(pathname: string) {

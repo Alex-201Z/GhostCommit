@@ -21,6 +21,22 @@ const completedOnboarding = {
     personalWorkspace: { id: 'workspace-1', name: 'Dev workspace' },
   },
 };
+const emptyToday = {
+  date: '2026-07-01',
+  agentStatus: 'NOT_INSTALLED',
+  session: { state: 'AGENT_NOT_CONNECTED' },
+  draft: { status: 'NOT_GENERATED', preview: [] },
+  activity: { totalSessions: 0, projectsTouched: 0, commitsDetected: 0, workItemsOrBlockers: 0 },
+  recentSessions: [],
+  checklist: {
+    accountCreated: true,
+    agentLinked: false,
+    firstProjectTracked: false,
+    firstSessionSynced: false,
+    firstDraftGenerated: false,
+  },
+  canGenerateDraft: false,
+};
 
 function renderAt(path: string) {
   window.history.pushState({}, '', path);
@@ -234,5 +250,51 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
     expect(screen.getByText(body)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/repos|activity|reports|agent/i), expect.anything());
+  });
+
+  it('renders the Today dashboard from the privacy-safe API without performance scoring', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => emptyToday });
+    renderAt('/app');
+
+    expect(await screen.findByRole('heading', { name: /aujourd’hui/i })).toBeInTheDocument();
+    expect(screen.getByText(/voici votre activité de développement du jour/i)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Agent non installé — aucune activité collectée');
+    expect(screen.getByRole('heading', { name: /session actuelle/i })).toBeInTheDocument();
+    expect(screen.getByText(/agent non connecté/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /pourquoi un agent local/i })).toHaveAttribute('href', '/app/settings');
+    expect(screen.getByRole('heading', { name: /brouillon du jour/i })).toBeInTheDocument();
+    expect(screen.getByText(/pas encore généré/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /générer le brouillon/i })).toBeDisabled();
+    expect(screen.getByRole('heading', { name: /activité du jour/i })).toBeInTheDocument();
+    expect(screen.getByText(/0 sessions/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 projets/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 commits/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /dernières sessions/i })).toBeInTheDocument();
+    expect(screen.getByText(/aucune session synchronisée/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /checklist de démarrage/i })).toBeInTheDocument();
+    expect(document.body.textContent?.toLowerCase()).not.toContain('score');
+  });
+
+  it('supports demonstration data for active, paused, empty, finished and agent-missing session states', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => emptyToday });
+    renderAt('/app');
+
+    fireEvent.click(await screen.findByRole('button', { name: /utiliser des données de démonstration/i }));
+
+    expect(screen.getByText(/session active/i)).toBeInTheDocument();
+    expect(screen.getByText(/suivi en pause/i)).toBeInTheDocument();
+    expect(screen.getByText(/aucune session aujourd’hui/i)).toBeInTheDocument();
+    expect(screen.getByText(/session terminée/i)).toBeInTheDocument();
+    expect(screen.getByText(/agent non connecté/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /mettre en pause/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(/confirmer la pause/i);
+    expect(screen.getByRole('button', { name: /reprendre le suivi/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /terminer ma journée/i })).toBeInTheDocument();
   });
 });

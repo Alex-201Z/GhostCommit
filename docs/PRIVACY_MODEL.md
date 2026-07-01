@@ -75,3 +75,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The shell shows the agent as not installed by default: no activity is collected.
 - Empty states explain future capabilities without connecting repositories, starting the agent, creating sessions, generating reports or exporting data.
 - Navigation and profile controls are UI placeholders only until their owning phases implement real behavior.
+
+## Phase 2 Today dashboard boundary
+
+- `GET /dashboard/today` is authenticated and owner-derived from the access token; clients cannot request another user’s day by ID.
+- The initial implementation is read-only and returns an empty/not-installed overview until future phases create real agent, project, session and draft data.
+- The dashboard displays only neutral counts and status labels. It does not compute or render productivity scores, rankings, performance judgments or motivation inference.
+- The response and UI must not include file contents, code diffs, absolute paths, hostnames, stable machine identifiers, secrets, provider payloads or tokens.
+- Demo data is local UI sample data only. It does not start collection, connect repositories, contact the agent, pause/resume tracking, stop sessions, generate reports, export or share anything.

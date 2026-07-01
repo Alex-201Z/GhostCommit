@@ -196,6 +196,45 @@ Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/
 - `npm run build`: passed.
 - `git diff --check`: passed.
 
+## 2026-07-01 — Phase 2 Today dashboard
+
+### Scope
+
+Today dashboard only. No repository connection, agent installation/linking, project authorization, real activity collection, session mutation, report generation, export, sharing or settings mutation was started.
+
+### Implementation
+
+- Added authenticated read-only `GET /api/v1/dashboard/today`.
+- Registered a new backend `DashboardModule`.
+- Returned the privacy-safe empty/not-installed Today summary until later phases create real data.
+- Added `/app` and `/app/today` Today dashboard rendering after consent.
+- Added the neutral day header: `Voici votre activité de développement du jour`.
+- Added session, daily draft, neutral activity counters, recent sessions and checklist cards.
+- Added local-only demonstration data for active, paused, no-session, finished and agent-missing session states.
+- Kept pause confirmation and demo controls local; no future agent/session/report APIs are called.
+- Preserved the permanent `Agent non installé — aucune activité collectée` shell status.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- dashboard.contract.spec.ts --runInBand` failed because `dashboard.controller` and `dashboard.service` did not exist.
+- RED: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` failed because `/app` still rendered the Phase 1B-C welcome/empty state and no demo button existed.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- dashboard.contract.spec.ts --runInBand` passed with 2/2 tests.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 16/16 tests.
+- `npm run lint`: passed across all four workspaces.
+- `npm run typecheck`: passed across all four workspaces.
+
+### Full verification
+
+Pending for this subphase:
+
+- `npm run db:generate`
+- `npm run db:validate`
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
+- `npm run build`
+- `git diff --check`
+
 ## 2026-07-01 — Phase 1B-C app shell
 
 ### Scope
@@ -236,3 +275,19 @@ Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/
 - `npm test`: passed; backend 2/2 and dashboard 14/14.
 - `npm run build`: passed.
 - `git diff --check`: passed.
+
+## 2026-07-01 — Phase 2 final verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 4/4, dashboard 16/16, agent/shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed.
+
+### Gate decision
+
+Phase 2 is complete locally. The Today dashboard is privacy-safe, read-only for real API data, and uses only local demo data for non-empty UI states. Phase 3 has not been started.

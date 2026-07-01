@@ -11,6 +11,7 @@ import { ActivityModule } from './activity/activity.module';
 import { SummaryModule } from './summary/summary.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
     SummaryModule,
     WorkspacesModule,
     OnboardingModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
