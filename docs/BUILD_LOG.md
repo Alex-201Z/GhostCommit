@@ -337,4 +337,28 @@ Local `prisma migrate deploy` and `npm run test:e2e --workspace @ghostcommit/bac
 - Prisma/Node connection check: `Can't reach database server at localhost:5432`.
 - `docker compose up -d postgres redis`: failed to connect to `dockerDesktopLinuxEngine`.
 
-The CI workflow still provisions PostgreSQL 16, runs `prisma migrate deploy`, sets `RUN_DATABASE_TESTS=true`, and executes backend e2e tests. Phase 3A requires that CI PostgreSQL run before treating the backend migration as fully validated.
+### GitHub Actions PostgreSQL validation
+
+Phase 3A was validated through draft PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28539045218
+- Job: https://github.com/Alex-201Z/GhostCommit/actions/runs/28539045218/job/84607764912
+- Head SHA: `7d9fd42b311dd6bd9704f56df4d5487ede74c042`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### Gate decision
+
+Phase 3A backend foundations are validated. Phase 3B may start next, limited to dashboard project/agent screens and still without activating Electron collection.

@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are implemented with contract/unit checks. PostgreSQL migration/e2e coverage is added but local execution is blocked by unavailable Docker/PostgreSQL; CI must validate before Phase 3A is considered fully closed. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are complete and validated in GitHub Actions PostgreSQL 16. Next: Phase 3B dashboard project/agent screens. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -86,7 +86,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 
 - GitHub OAuth cannot be fully exercised locally without a configured provider app.
 - Real Today activity remains empty until later phases implement project authorization, agent linking, sessions and report generation.
-- Local PostgreSQL validation for Phase 3A is blocked until Docker Desktop/PostgreSQL is available; CI PostgreSQL 16 must validate the migration/e2e suite.
+- Local PostgreSQL validation was blocked by unavailable Docker/PostgreSQL, so Phase 3A was validated in GitHub Actions PostgreSQL 16 instead.
 - The Electron agent still contains prototype flows that can expose absolute paths/legacy token handling; they were not expanded in Phase 3A and must be replaced in later Phase 3 subphases before real collection is allowed.
 
 ## Tests executed
@@ -112,13 +112,23 @@ Phase 3A checks on 2026-07-01:
 - `npm test`: passed; backend 10/10, dashboard 16/16, agent/shared no test files.
 - `npm run build`: passed.
 - `git diff --check`: passed.
-- `prisma migrate deploy` and `test:e2e` with `RUN_DATABASE_TESTS=true`: blocked locally because PostgreSQL is not reachable and Docker Desktop is not running.
+- Local `prisma migrate deploy` and `test:e2e` with `RUN_DATABASE_TESTS=true`: blocked because PostgreSQL was not reachable and Docker Desktop was not running.
+- GitHub Actions CI on PR #5: passed on run `28539045218`.
+  - PostgreSQL 16 service initialized.
+  - `npm ci --ignore-scripts`: passed.
+  - `npm run db:generate`: passed.
+  - `prisma migrate deploy`: passed.
+  - `npm run lint`: passed.
+  - `npm run typecheck`: passed.
+  - `npm test`: passed.
+  - `npm run test:e2e --workspace @ghostcommit/backend`: passed with `RUN_DATABASE_TESTS=true`.
+  - `npm run build`: passed.
 
 ## External blockers
 
 - Real OAuth provider credentials are external.
-- Docker Desktop/PostgreSQL local service is unavailable in this environment, blocking local migration/e2e execution for Phase 3A.
+- Docker Desktop/PostgreSQL local service is unavailable in this environment; use GitHub Actions PostgreSQL 16 or a local PostgreSQL 16 service for future migration/e2e validation.
 
 ## Next exact task
 
-Commit Phase 3A backend foundations, then validate the PostgreSQL migration/e2e suite in CI or in a local environment with PostgreSQL 16 before starting Phase 3B dashboard/agent UI.
+Start Phase 3B dashboard project/agent screens with TDD, without enabling Electron collection yet.
