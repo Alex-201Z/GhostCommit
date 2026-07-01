@@ -989,6 +989,7 @@ function ProjectsPage({ accessToken }: { accessToken: string }) {
 function ProjectDetailPage({ accessToken, projectId }: { accessToken: string; projectId: string }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [project, setProject] = useState<ProjectSummary | null>(null);
+  const [actionState, setActionState] = useState<'idle' | 'saving' | 'error'>('idle');
 
   useEffect(() => {
     let active = true;
@@ -1026,15 +1027,63 @@ function ProjectDetailPage({ accessToken, projectId }: { accessToken: string; pr
     );
   }
 
+  async function mutateProject(action: 'pause' | 'resume' | 'archive') {
+    setActionState('saving');
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/${action}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: authHeaders(accessToken),
+      });
+      if (!response.ok) throw new Error('Unable to update project');
+      const updated = await parseJson<ProjectSummary>(response);
+      setProject(updated);
+      setActionState('idle');
+    } catch {
+      setActionState('error');
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
         <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">{statusLabel(project.trackingStatus)}</p>
         <h1 className="mt-3 text-3xl font-semibold">{project.displayName}</h1>
         <p className="mt-4 text-slate-300">Projet local autorisé : {project.localAlias}</p>
-        <button type="button" className="mt-5 rounded-full border border-slate-700 px-4 py-2">
-          Mettre le suivi en pause
-        </button>
+        <div className="mt-5 flex flex-wrap gap-3">
+          {project.trackingStatus === 'PAUSED' ? (
+            <button
+              type="button"
+              disabled={actionState === 'saving'}
+              className="rounded-full border border-slate-700 px-4 py-2 disabled:opacity-60"
+              onClick={() => void mutateProject('resume')}
+            >
+              Reprendre le suivi
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={actionState === 'saving' || project.trackingStatus === 'ARCHIVED'}
+              className="rounded-full border border-slate-700 px-4 py-2 disabled:opacity-60"
+              onClick={() => void mutateProject('pause')}
+            >
+              Mettre le suivi en pause
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={actionState === 'saving' || project.trackingStatus === 'ARCHIVED'}
+            className="rounded-full border border-red-800 px-4 py-2 text-red-100 disabled:opacity-60"
+            onClick={() => void mutateProject('archive')}
+          >
+            Archiver ce projet
+          </button>
+        </div>
+        {actionState === 'error' ? (
+          <p role="alert" className="mt-4 text-sm text-rose-200">
+            Impossible de mettre à jour ce projet. Aucune collecte n’a été démarrée.
+          </p>
+        ) : null}
       </div>
       <div role="tablist" aria-label="Détail projet" className="flex flex-wrap gap-2">
         {['Aperçu', 'Sessions', 'Livrables', 'Confidentialité'].map((tab) => (
@@ -1063,6 +1112,7 @@ function ProjectDetailPage({ accessToken, projectId }: { accessToken: string; pr
 function AgentSettingsPage({ accessToken }: { accessToken: string }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [installations, setInstallations] = useState<AgentInstallation[]>([]);
+  const [actionState, setActionState] = useState<'idle' | 'saving' | 'error'>('idle');
 
   useEffect(() => {
     let active = true;
@@ -1088,6 +1138,23 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
     };
   }, [accessToken]);
 
+  async function revokeInstallation(installationId: string) {
+    setActionState('saving');
+    try {
+      const response = await fetch(`${API_BASE_URL}/agent/installations/${encodeURIComponent(installationId)}/revoke`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: authHeaders(accessToken),
+      });
+      if (!response.ok) throw new Error('Unable to revoke installation');
+      const revoked = await parseJson<AgentInstallation>(response);
+      setInstallations((current) => current.map((installation) => (installation.id === revoked.id ? revoked : installation)));
+      setActionState('idle');
+    } catch {
+      setActionState('error');
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
@@ -1106,6 +1173,11 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
       {state === 'error' ? (
         <p role="alert" className="rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-amber-100">
           Impossible de charger les appareils. Aucune collecte n’est démarrée.
+        </p>
+      ) : null}
+      {actionState === 'error' ? (
+        <p role="alert" className="rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-amber-100">
+          Impossible de révoquer cet appareil. Aucun token n’est affiché.
         </p>
       ) : null}
       {state === 'ready' && installations.length === 0 ? (
@@ -1127,7 +1199,12 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
                 Dernier contact : {installation.lastSeenAt ? 'contact récent' : 'aucun contact'}
               </p>
             </div>
-            <button type="button" className="rounded-full border border-red-800 px-4 py-2 text-red-100">
+            <button
+              type="button"
+              disabled={actionState === 'saving' || installation.status === 'REVOKED'}
+              className="rounded-full border border-red-800 px-4 py-2 text-red-100 disabled:opacity-60"
+              onClick={() => void revokeInstallation(installation.id)}
+            >
               Révoquer cet appareil
             </button>
           </div>

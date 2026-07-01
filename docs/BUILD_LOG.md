@@ -511,3 +511,42 @@ No Electron folder picker, file watcher activation, heartbeat, activity session 
 ### Gate decision
 
 Phase 3D dashboard project authorization flow is complete locally. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3E dashboard project and agent controls
+
+### Scope
+
+Dashboard control mutations for existing Phase 3A endpoints:
+
+- pause, resume and archive owned projects from `/app/projects/:id`;
+- revoke owned agent installations from `/app/settings/agent`;
+- update visible statuses from API responses.
+
+No Electron watcher activation, heartbeat, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Mutations send only authenticated control requests to existing owner-scoped endpoints.
+- No local path, file content, code diff, token material, raw hostname, machine identifier, secret or activity payload is sent or rendered.
+- Agent revocation updates visible status only; it does not start heartbeat or sync.
+- Project pause/archive controls do not contact activity, session, report, export or agent sync endpoints.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="pause and archive|revoke an agent"` failed because archive and revoke controls were placeholders.
+- GREEN: the same targeted test passed after wiring the project and agent control mutations.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed with 23/23 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 23/23, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3E dashboard project and agent controls are complete locally. Phase 4 must not start from this state.

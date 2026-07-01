@@ -484,3 +484,12 @@ La Phase 3D branche le bouton `Ajouter un projet` de `/app/projects` sur `POST /
 - une confirmation explicite est obligatoire avant l'appel API ;
 - aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est demande ou affiche ;
 - la creation du projet n'active pas le watcher Electron, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Contrôles Phase 3E
+
+La Phase 3E branche les contrôles utilisateur déjà exposés par le backend :
+
+- pause, reprise et archivage depuis `/app/projects/:id` ;
+- révocation d'un agent depuis `/app/settings/agent`.
+
+Ces actions mettent à jour les statuts visibles depuis les réponses API. Elles n'envoient aucun chemin local, contenu de fichier, diff, hostname, identifiant machine, token ou secret, et ne démarrent pas le watcher, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.

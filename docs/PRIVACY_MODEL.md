@@ -119,3 +119,10 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The `POST /projects` payload contains only display name, `LOCAL` provider, safe alias, optional branch and ignored patterns.
 - Creating a project in the dashboard does not start the Electron watcher, heartbeat, local file scanning, activity sessions, reports, exports or sharing.
 - The access token remains in memory and is used only as the Authorization header for the existing project API call.
+
+## Phase 3E project and agent control boundary
+
+- Project pause, resume and archive controls call only the owned project control endpoints and update the visible status from the response.
+- Agent revocation calls only the owned installation revoke endpoint and updates the visible device status.
+- These controls do not send local paths, file contents, code diffs, hostnames, machine identifiers, tokens, secrets or activity payloads.
+- These controls do not start file watching, heartbeat, local scanning, session synchronization, report generation, export or sharing.

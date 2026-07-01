@@ -373,6 +373,34 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
     expect(document.body.textContent).not.toMatch(/C:\\|Users|\/home|contenu de fichiers/i);
   });
 
+  it('lets the user pause and archive an owned project from its detail page', async () => {
+    const pausedProject = { ...sampleProjects[0], trackingStatus: 'PAUSED' };
+    const archivedProject = { ...sampleProjects[0], trackingStatus: 'ARCHIVED' };
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => sampleProjects[0] })
+      .mockResolvedValueOnce({ ok: true, json: async () => pausedProject })
+      .mockResolvedValueOnce({ ok: true, json: async () => archivedProject });
+    renderAt('/app/projects/project-1');
+
+    fireEvent.click(await screen.findByRole('button', { name: /mettre le suivi en pause/i }));
+    expect(await screen.findByText(/en pause/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /archiver ce projet/i }));
+    expect(await screen.findByText(/archiv/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/project-1/pause', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer short-lived-access-token' },
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/project-1/archive', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer short-lived-access-token' },
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
+  });
+
   it('renders the agent settings page from installations without exposing token material', async () => {
     fetchMock
       .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
@@ -391,6 +419,27 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
       credentials: 'include',
       headers: { Authorization: 'Bearer short-lived-access-token' },
     });
+  });
+
+  it('lets the user revoke an agent installation without exposing token material', async () => {
+    const revokedInstallation = { ...sampleInstallations[0], status: 'REVOKED', lastSeenAt: null };
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => sampleInstallations })
+      .mockResolvedValueOnce({ ok: true, json: async () => revokedInstallation });
+    renderAt('/app/settings/agent');
+
+    fireEvent.click(await screen.findByRole('button', { name: /r.voquer cet appareil/i }));
+
+    expect(await screen.findByText(/r.voqu/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agent/installations/agent-1/revoke', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer short-lived-access-token' },
+    });
+    expect(document.body.textContent?.toLowerCase()).not.toMatch(/token|secret|hostname|machine/);
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
   });
 
   it('renders the Today dashboard from the privacy-safe API without performance scoring', async () => {

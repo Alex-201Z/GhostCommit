@@ -350,3 +350,33 @@ Client guarantees:
 - sends the authenticated request to `POST /projects` with the in-memory Bearer token;
 - never asks for or renders absolute local paths, file contents, code diffs, token material, raw hostnames or machine identifiers;
 - adds the returned project to the visible list without calling activity, session, report or agent sync endpoints.
+
+## Phase 3E dashboard project and agent control mutations
+
+Phase 3E wires existing Phase 3A control endpoints into the dashboard. These are user-control mutations only and do not activate collection.
+
+### `/app/projects/:id`
+
+User actions:
+
+- `POST /projects/:id/pause` from `Mettre le suivi en pause`;
+- `POST /projects/:id/resume` from `Reprendre le suivi` when the project is paused;
+- `POST /projects/:id/archive` from `Archiver ce projet`.
+
+Client guarantees:
+
+- updates the visible project status from the API response;
+- sends only the in-memory Bearer token and no local path/activity payload;
+- does not call activity, session, report, export or agent sync endpoints.
+
+### `/app/settings/agent`
+
+User action:
+
+- `POST /agent/installations/:id/revoke` from `Révoquer cet appareil`.
+
+Client guarantees:
+
+- updates the visible installation status from the API response;
+- never renders token material, raw hostnames or stable machine identifiers;
+- does not start heartbeat, session synchronization, file watching or project scanning.
