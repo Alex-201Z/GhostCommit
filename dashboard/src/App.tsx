@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 const queryClient = new QueryClient();
@@ -716,6 +716,15 @@ function ProjectsPage({ accessToken }: { accessToken: string }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ProjectSummary['trackingStatus']>('ALL');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createState, setCreateState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [newProject, setNewProject] = useState({
+    displayName: '',
+    localAlias: '',
+    branch: '',
+    ignoredPatterns: '',
+    confirmed: false,
+  });
 
   useEffect(() => {
     let active = true;
@@ -747,6 +756,46 @@ function ProjectsPage({ accessToken }: { accessToken: string }) {
     return matchesQuery && matchesStatus;
   });
 
+  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newProject.confirmed) {
+      setCreateState('error');
+      return;
+    }
+
+    const ignoredPatterns = newProject.ignoredPatterns
+      .split('\n')
+      .map((pattern) => pattern.trim())
+      .filter(Boolean);
+
+    setCreateState('saving');
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...authHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          displayName: newProject.displayName.trim(),
+          gitProvider: 'LOCAL',
+          localAlias: newProject.localAlias.trim(),
+          ...(newProject.branch.trim() ? { branch: newProject.branch.trim() } : {}),
+          ignoredPatterns,
+        }),
+      });
+      if (!response.ok) throw new Error('Unable to create project');
+      const created = await parseJson<ProjectSummary>(response);
+      setProjects((current) => [created, ...current]);
+      setShowCreateForm(false);
+      setNewProject({ displayName: '', localAlias: '', branch: '', ignoredPatterns: '', confirmed: false });
+      setCreateState('idle');
+    } catch {
+      setCreateState('error');
+    }
+  }
+
   if (state === 'error') {
     return (
       <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
@@ -770,7 +819,11 @@ function ProjectsPage({ accessToken }: { accessToken: string }) {
               Les projets affichés ici sont ceux que vous avez explicitement autorisés. Les chemins absolus restent locaux.
             </p>
           </div>
-          <button type="button" className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950">
+          <button
+            type="button"
+            className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950"
+            onClick={() => setShowCreateForm((visible) => !visible)}
+          >
             Ajouter un projet
           </button>
         </div>
@@ -794,6 +847,102 @@ function ProjectsPage({ accessToken }: { accessToken: string }) {
           </select>
         </div>
       </div>
+
+      {showCreateForm ? (
+        <form
+          onSubmit={handleCreateProject}
+          className="rounded-3xl border border-emerald-900/70 bg-emerald-950/20 p-6"
+          aria-label="Autoriser un projet local"
+        >
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Autorisation explicite</p>
+            <h2 className="mt-3 text-2xl font-semibold">Ajouter un projet local</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+              Renseignez uniquement les métadonnées safe préparées localement. Ne collez jamais de chemin complet, contenu de fichier ou secret.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm text-slate-300">
+              Nom affiché
+              <input
+                required
+                value={newProject.displayName}
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setNewProject((current) => ({ ...current, displayName: value }));
+                }}
+                className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-300">
+              Alias local safe
+              <input
+                required
+                value={newProject.localAlias}
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setNewProject((current) => ({ ...current, localAlias: value }));
+                }}
+                className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-300">
+              Branche
+              <input
+                value={newProject.branch}
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setNewProject((current) => ({ ...current, branch: value }));
+                }}
+                className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-300">
+              Patterns ignorés
+              <textarea
+                value={newProject.ignoredPatterns}
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setNewProject((current) => ({ ...current, ignoredPatterns: value }));
+                }}
+                className="min-h-28 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+              />
+            </label>
+          </div>
+          <label className="mt-5 flex gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={newProject.confirmed}
+              onChange={(event) => {
+                const { checked } = event.currentTarget;
+                setNewProject((current) => ({ ...current, confirmed: checked }));
+              }}
+            />
+            <span>Je confirme que ce projet a été choisi explicitement et qu’aucun chemin complet ou contenu de fichier n’est envoyé.</span>
+          </label>
+          {createState === 'error' ? (
+            <p role="alert" className="mt-4 text-sm text-rose-200">
+              Impossible d’autoriser ce projet. Vérifiez la confirmation et les métadonnées safe.
+            </p>
+          ) : null}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={createState === 'saving'}
+              className="rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {createState === 'saving' ? 'Autorisation…' : 'Autoriser ce projet'}
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-slate-700 px-4 py-2"
+              onClick={() => setShowCreateForm(false)}
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       {state === 'loading' ? (
         <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">Chargement des projets…</p>

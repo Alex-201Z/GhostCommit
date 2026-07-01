@@ -474,3 +474,13 @@ La Phase 3C ajoute des fondations locales cote agent pour preparer une selection
 - `ActivityTracker` ne synchronise plus de sessions en attente des sa construction.
 
 Cette phase ne branche pas encore l'UI Electron de selection, le heartbeat, la synchronisation de sessions, la timeline, les rapports, l'export ou le partage.
+
+## Flux projet Phase 3D
+
+La Phase 3D branche le bouton `Ajouter un projet` de `/app/projects` sur `POST /api/v1/projects` :
+
+- l'utilisateur ouvre volontairement le formulaire ;
+- il renseigne uniquement un nom affiche, un alias local safe, une branche optionnelle et des patterns ignores ;
+- une confirmation explicite est obligatoire avant l'appel API ;
+- aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est demande ou affiche ;
+- la creation du projet n'active pas le watcher Electron, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.

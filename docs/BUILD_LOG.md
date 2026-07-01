@@ -470,3 +470,44 @@ Passing CI steps:
 ### Gate decision
 
 Phase 3C local foundations are validated locally and in GitHub Actions PostgreSQL CI. The next Phase 3 subphase may wire the explicit user-controlled project authorization flow, but Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3D dashboard project authorization flow
+
+### Scope
+
+Dashboard project authorization flow using the existing Phase 3A backend endpoint:
+
+- `/app/projects` opens an explicit add-project form from the `Ajouter un projet` control;
+- the form collects safe metadata only: display name, safe local alias, optional branch and ignored patterns;
+- an explicit confirmation checkbox is required before submitting;
+- submission calls authenticated `POST /api/v1/projects`;
+- the returned project is added to the visible list.
+
+No Electron folder picker, file watcher activation, heartbeat, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The dashboard form does not request or render absolute local paths.
+- The create-project payload never includes file contents, code diffs, token material, raw hostnames, machine identifiers or secrets.
+- The flow calls only the project API; it does not call activity, session, report or agent sync endpoints.
+- The access token remains in memory and is used only as the Authorization header.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="creates a local project"` failed because the add-project button was still a placeholder and no labeled form fields existed.
+- GREEN: the same targeted test passed after implementing the explicit form and project mutation.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed with 21/21 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 21/21, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3D dashboard project authorization flow is complete locally. Phase 4 must not start from this state.

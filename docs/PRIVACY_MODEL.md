@@ -111,3 +111,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The agent does not automatically watch previously configured paths at startup.
 - `ActivityTracker` does not automatically synchronize pending sessions when constructed; later session sync must opt in explicitly after the owning phase adds safe payload filtering and agent-token validation.
 - This phase still does not transmit file contents, code diffs, absolute paths, raw hostnames, machine identifiers, tokens, secrets or activity sessions.
+
+## Phase 3D dashboard project authorization boundary
+
+- The dashboard can create a project only after the user opens the add-project form, enters safe metadata and checks an explicit confirmation box.
+- The form never requests absolute paths. Local folder selection remains an agent-local concern.
+- The `POST /projects` payload contains only display name, `LOCAL` provider, safe alias, optional branch and ignored patterns.
+- Creating a project in the dashboard does not start the Electron watcher, heartbeat, local file scanning, activity sessions, reports, exports or sharing.
+- The access token remains in memory and is used only as the Authorization header for the existing project API call.

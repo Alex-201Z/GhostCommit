@@ -311,6 +311,50 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
   });
 
+  it('creates a local project only after explicit safe-alias confirmation', async () => {
+    const createdProject = {
+      ...sampleProjects[0],
+      id: 'project-2',
+      displayName: 'Client Portal',
+      localAlias: 'client-portal',
+      branch: 'main',
+      ignoredPatterns: ['dist/**', '.env*'],
+    };
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => createdProject });
+    renderAt('/app/projects');
+
+    fireEvent.click(await screen.findByRole('button', { name: /ajouter un projet/i }));
+    fireEvent.change(screen.getByLabelText(/nom affich/i), { target: { value: 'Client Portal' } });
+    fireEvent.change(screen.getByLabelText(/alias local safe/i), { target: { value: 'client-portal' } });
+    fireEvent.change(screen.getByLabelText(/branche/i), { target: { value: 'main' } });
+    fireEvent.change(screen.getByLabelText(/patterns ignor/i), { target: { value: 'dist/**\n.env*' } });
+    fireEvent.click(screen.getByLabelText(/je confirme/i));
+    fireEvent.click(screen.getByRole('button', { name: /autoriser ce projet/i }));
+
+    expect(await screen.findByRole('heading', { name: /client portal/i })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Authorization: 'Bearer short-lived-access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        displayName: 'Client Portal',
+        gitProvider: 'LOCAL',
+        localAlias: 'client-portal',
+        branch: 'main',
+        ignoredPatterns: ['dist/**', '.env*'],
+      }),
+    });
+    expect(document.body.textContent).not.toMatch(/C:\\|Users|\/home|contenu de fichiers|token/i);
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports|agent/i), expect.anything());
+  });
+
   it('renders project detail privacy controls without file contents or absolute paths', async () => {
     fetchMock
       .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })

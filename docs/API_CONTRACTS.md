@@ -325,3 +325,28 @@ The agent must call `toCreateProjectPayload(..., { confirmed: true })` after exp
 - Non-Git folders cannot become project authorization drafts.
 - The API payload never includes absolute paths, parent directory paths, file contents, code diffs, hostnames, machine identifiers, tokens or secrets.
 - User-provided ignored patterns are filtered locally before they can enter the project payload.
+
+## Phase 3D explicit dashboard project authorization flow
+
+Phase 3D wires the `/app/projects` add-project control to the existing `POST /projects` endpoint. This is still a user-controlled metadata authorization flow; it does not start the Electron watcher, heartbeat, file scanning or session synchronization.
+
+### `/app/projects` create form
+
+The dashboard renders an explicit authorization form after the user clicks `Ajouter un projet`. Submitted request:
+
+```json
+{
+  "displayName": "Client Portal",
+  "gitProvider": "LOCAL",
+  "localAlias": "client-portal",
+  "branch": "main",
+  "ignoredPatterns": ["dist/**", ".env*"]
+}
+```
+
+Client guarantees:
+
+- requires an explicit confirmation checkbox before submission;
+- sends the authenticated request to `POST /projects` with the in-memory Bearer token;
+- never asks for or renders absolute local paths, file contents, code diffs, token material, raw hostnames or machine identifiers;
+- adds the returned project to the visible list without calling activity, session, report or agent sync endpoints.
