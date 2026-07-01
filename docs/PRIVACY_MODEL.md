@@ -61,3 +61,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The dashboard callback removes OAuth query parameters before completing the browser-side session refresh.
 - The short-lived access token exists only in React memory. It is not stored in `localStorage`, `sessionStorage`, query parameters, hash fragments, logs or rendered errors.
 - Login and callback errors use generic safe language and never echo OAuth `code`, `state`, provider payloads, access tokens or refresh tokens.
+
+## Phase 1B-B onboarding boundary
+
+- Onboarding explains what GhostCommit may use and what it must never use before the user reaches the protected app area.
+- Both transparency confirmations are mandatory before consent is recorded.
+- The onboarding UI uses the Phase 1A consent endpoint and does not activate collection, agent linking, repository tracking, session creation, reporting, sharing or export.
+- Local persistence is limited to a non-sensitive onboarding step/completion marker. It must never contain tokens, OAuth parameters, file paths, project identifiers, secrets or activity payloads.
+- `/app/*` remains blocked for authenticated users until consent is present.

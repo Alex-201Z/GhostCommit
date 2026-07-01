@@ -22,7 +22,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 0 — Foundations and technical contract | Complete | Documentation, workspace commands, CI, dashboard health page and shared package are present. |
 | Phase 1A — Authentication and data foundations | Complete | GitHub OAuth, refresh rotation, personal workspace, consent foundations and PostgreSQL 16 CI validation are merged in `main`. |
 | Phase 1B-A — Public interface and login | Complete locally | Public landing, GitHub login start, callback refresh, safe errors and route guards implemented and verified locally. Commit pending. |
-| Phase 1B-B — Privacy-first onboarding UI | Not started | Must wait for 1B-A verification and commit. |
+| Phase 1B-B — Privacy-first onboarding UI | Complete locally | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented and verified locally. Commit pending. |
 | Phase 1B-C — App shell | Not started | Must wait for onboarding UI verification and commit. |
 | Phase 2 — Today dashboard | Not started | |
 | Phase 3 — Projects and agent linking | Not started | |
@@ -43,8 +43,16 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - `/login` route using `POST /api/v1/auth/github/start`;
   - `/auth/callback` route that strips query parameters and refreshes via HttpOnly cookie;
   - `/app/*` protected route guard that redirects anonymous users to `/login`;
-  - connected users on `/login` redirect to `/app`;
+  - connected users on `/login` redirect into the authenticated flow;
   - access token retained only in React memory.
+- Phase 1B-B onboarding UI:
+  - five-step privacy-first onboarding at `/onboarding`;
+  - two-column transparency screen: `GhostCommit peut utiliser` and `GhostCommit ne peut jamais utiliser`;
+  - mandatory collection notice and data-control confirmations;
+  - `GET /api/v1/onboarding/status` loading/error/resume handling;
+  - `PATCH /api/v1/onboarding/status` consent submission with Phase 1A DTO;
+  - `/app/*` guard redirects authenticated users without consent to onboarding;
+  - no collection, repository connection, agent linking, session creation or reporting activated.
 
 ## Current technical decisions
 
@@ -90,10 +98,26 @@ Phase 1B-A local checks on 2026-07-01:
   - `npm run build`: passed.
   - `git diff --check`: passed.
 
+Phase 1B-B local checks on 2026-07-01:
+
+- RED: dashboard tests failed because `/onboarding` was absent and `/app/*` did not enforce consent.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed, 9/9 dashboard tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+- Full gate with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+  - `npm run db:generate`: passed.
+  - `npm run db:validate`: passed.
+  - `npm run lint`: passed.
+  - `npm run typecheck`: passed.
+  - `npm test`: passed; backend 2/2 and dashboard 9/9.
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+
 ## External blockers
 
 - Real OAuth provider credentials are external. Development uses injectable API URLs and mocked frontend tests until provider configuration is supplied.
 
 ## Next exact task
 
-Commit Phase 1B-A, then start Phase 1B-B privacy-first onboarding UI with failing tests for the five-step consent journey.
+Run the full repository gate for Phase 1B-B, commit it, then start Phase 1B-C app shell with failing route/accessibility tests.

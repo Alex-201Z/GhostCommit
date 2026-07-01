@@ -19,6 +19,15 @@ type RefreshResponse = {
   user: PublicUser;
 };
 
+type OnboardingStatusResponse = {
+  currentStep: string;
+  completedAt: string | null;
+  user?: {
+    privacyConsents?: Array<{ policyVersion: string }>;
+    personalWorkspace?: { id: string; name: string } | null;
+  };
+};
+
 type AuthState =
   | { status: 'checking'; accessToken: null; user: null }
   | { status: 'anonymous'; accessToken: null; user: null }
@@ -181,7 +190,7 @@ function LoginPage() {
   const [isStarting, setIsStarting] = useState(false);
 
   if (auth.status === 'checking') return <LoadingPage label="Vérification de la session…" />;
-  if (auth.status === 'authenticated') return <Navigate to="/app" replace />;
+  if (auth.status === 'authenticated') return <Navigate to="/onboarding" replace />;
 
   async function startGithub() {
     setError(null);
@@ -252,7 +261,7 @@ function AuthCallbackPage() {
     async function finish() {
       const ok = await auth.refreshSession();
       if (!active) return;
-      if (ok) navigate('/app', { replace: true });
+      if (ok) navigate('/onboarding', { replace: true });
       else setError(true);
     }
 
@@ -283,10 +292,268 @@ function AuthCallbackPage() {
   );
 }
 
+function hasCompletedOnboarding(status: OnboardingStatusResponse) {
+  return Boolean(status.completedAt || status.currentStep === 'PRIVACY_ACCEPTED' || status.user?.privacyConsents?.length);
+}
+
+function authHeaders(accessToken: string) {
+  return { Authorization: `Bearer ${accessToken}` };
+}
+
+async function fetchOnboardingStatus(accessToken: string) {
+  const response = await fetch(`${API_BASE_URL}/onboarding/status`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) throw new Error('Unable to load onboarding status');
+  return parseJson<OnboardingStatusResponse>(response);
+}
+
+const ONBOARDING_STEP_KEY = 'ghostcommit_onboarding_step';
+const ONBOARDING_COMPLETE_KEY = 'ghostcommit_onboarding_completed';
+const POLICY_VERSION = '2026-06-22';
+
+const onboardingSteps = [
+  {
+    title: 'Bienvenue dans GhostCommit',
+    body: "GhostCommit vous aide à transformer votre travail de développement en preuves lisibles, sans devenir un outil de surveillance.",
+  },
+  {
+    title: 'Votre espace personnel',
+    body: 'Un workspace personnel est créé automatiquement pour garder la V1 centrée sur votre usage et vos rapports privés.',
+  },
+  {
+    title: 'Comment fonctionne GhostCommit',
+    body: "Plus tard, l’agent local ne suivra que les projets que vous choisissez explicitement. Pour l’instant, aucune collecte n’est activée.",
+  },
+  {
+    title: 'Données jamais collectées',
+    body: 'GhostCommit ne collecte jamais contenu de fichiers, frappes clavier, captures, navigation, mots de passe ou fichiers hors dossiers autorisés.',
+  },
+  {
+    title: 'Consentement et contrôle',
+    body: 'Validez uniquement si vous comprenez les données utilisables et les limites permanentes du produit.',
+  },
+] as const;
+
+function OnboardingRoute() {
+  const auth = useAuth();
+  if (auth.status === 'checking') return <LoadingPage label="Préparation de l’onboarding…" />;
+  if (auth.status === 'anonymous') return <Navigate to="/login" replace />;
+  return <OnboardingPage accessToken={auth.accessToken} />;
+}
+
+function OnboardingPage({ accessToken }: { accessToken: string }) {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [step, setStep] = useState(() => Number(localStorage.getItem(ONBOARDING_STEP_KEY) || '0'));
+  const [hasReadNotice, setHasReadNotice] = useState(false);
+  const [understandsControl, setUnderstandsControl] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const body = await fetchOnboardingStatus(accessToken);
+        if (!active) return;
+        if (hasCompletedOnboarding(body)) {
+          localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+          navigate('/app', { replace: true });
+          return;
+        }
+        setStatus('ready');
+      } catch {
+        if (active) setStatus('error');
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [accessToken, navigate]);
+
+  function persistStep(nextStep: number) {
+    setStep(nextStep);
+    localStorage.setItem(ONBOARDING_STEP_KEY, String(nextStep));
+  }
+
+  async function complete() {
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/onboarding/status`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          ...authHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          privacyPolicyAccepted: true,
+          hasReadCollectionNotice: true,
+          understandsDataControl: true,
+          policyVersion: POLICY_VERSION,
+          source: 'ONBOARDING',
+        }),
+      });
+      if (!response.ok) throw new Error('Unable to update onboarding');
+      localStorage.removeItem(ONBOARDING_STEP_KEY);
+      localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+      navigate('/app', { replace: true });
+    } catch {
+      setStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (status === 'loading') return <LoadingPage label="Chargement de l’onboarding…" />;
+  if (status === 'error') {
+    return (
+      <Surface>
+        <div className="flex flex-1 items-center justify-center">
+          <p role="alert" className="rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-100">
+            Impossible de reprendre l’onboarding. Réessayez depuis la connexion.
+          </p>
+        </div>
+      </Surface>
+    );
+  }
+
+  const current = onboardingSteps[Math.min(Math.max(step, 0), onboardingSteps.length - 1)];
+  const isLast = step >= onboardingSteps.length - 1;
+
+  return (
+    <Surface>
+      <section className="mx-auto my-auto w-full max-w-5xl rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-2xl sm:p-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
+          Étape {Math.min(step + 1, onboardingSteps.length)} sur {onboardingSteps.length}
+        </p>
+        <h1 className="mt-4 text-4xl font-semibold tracking-tight">{current.title}</h1>
+        <p className="mt-4 max-w-3xl leading-7 text-slate-300">{current.body}</p>
+
+        {isLast ? (
+          <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <article className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-5">
+              <h2 className="text-2xl font-semibold">GhostCommit peut utiliser</h2>
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-300">
+                <li>Sessions de travail autorisées.</li>
+                <li>Projets Git explicitement autorisés.</li>
+                <li>Chemins relatifs filtrés.</li>
+                <li>Statistiques Git agrégées.</li>
+              </ul>
+            </article>
+            <article className="rounded-2xl border border-red-900/70 bg-red-950/20 p-5">
+              <h2 className="text-2xl font-semibold">GhostCommit ne peut jamais utiliser</h2>
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-300">
+                <li>Contenu de fichiers.</li>
+                <li>Frappes clavier, captures ou navigateur.</li>
+                <li>Mots de passe, secrets ou fichiers hors dossiers autorisés.</li>
+              </ul>
+            </article>
+            <div className="space-y-4 md:col-span-2">
+              <label className="flex gap-3 rounded-2xl border border-slate-800 p-4">
+                <input
+                  type="checkbox"
+                  checked={hasReadNotice}
+                  onChange={(event) => setHasReadNotice(event.currentTarget.checked)}
+                />
+                <span>J’ai lu la notice de collecte.</span>
+              </label>
+              <label className="flex gap-3 rounded-2xl border border-slate-800 p-4">
+                <input
+                  type="checkbox"
+                  checked={understandsControl}
+                  onChange={(event) => setUnderstandsControl(event.currentTarget.checked)}
+                />
+                <span>Je comprends que je garde le contrôle des données et rapports.</span>
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <button
+            type="button"
+            onClick={() => persistStep(Math.max(step - 1, 0))}
+            disabled={step === 0}
+            className="rounded-full border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+          >
+            Retour
+          </button>
+          {isLast ? (
+            <button
+              type="button"
+              onClick={() => void complete()}
+              disabled={!hasReadNotice || !understandsControl || isSubmitting}
+              className="rounded-full bg-emerald-400 px-5 py-3 font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? 'Validation…' : 'Terminer l’onboarding'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => persistStep(Math.min(step + 1, onboardingSteps.length - 1))}
+              className="rounded-full bg-emerald-400 px-5 py-3 font-semibold text-slate-950"
+            >
+              Continuer
+            </button>
+          )}
+        </div>
+      </section>
+    </Surface>
+  );
+}
+
 function ProtectedRoute() {
   const auth = useAuth();
   if (auth.status === 'checking') return <LoadingPage label="Vérification de l’accès…" />;
   if (auth.status === 'anonymous') return <Navigate to="/login" replace />;
+  if (localStorage.getItem(ONBOARDING_COMPLETE_KEY) !== 'true') {
+    return <RequireConsent accessToken={auth.accessToken} />;
+  }
+  return (
+    <Surface>
+      <section className="my-auto rounded-3xl border border-slate-800 bg-slate-950/80 p-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Phase 1B-C à venir</p>
+        <h1 className="mt-4 text-4xl font-semibold">Espace GhostCommit protégé</h1>
+        <p className="mt-4 max-w-2xl leading-7 text-slate-300">
+          Vous êtes connecté. Le shell applicatif complet reste volontairement hors périmètre de cette sous-phase.
+        </p>
+      </section>
+    </Surface>
+  );
+}
+
+function RequireConsent({ accessToken }: { accessToken: string }) {
+  const [status, setStatus] = useState<'checking' | 'accepted' | 'missing' | 'error'>('checking');
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const body = await fetchOnboardingStatus(accessToken);
+        if (!active) return;
+        if (hasCompletedOnboarding(body)) {
+          localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+          setStatus('accepted');
+        } else {
+          setStatus('missing');
+        }
+      } catch {
+        if (active) setStatus('error');
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  if (status === 'checking') return <LoadingPage label="Vérification du consentement…" />;
+  if (status === 'missing') return <Navigate to="/onboarding" replace />;
+  if (status === 'error') return <Navigate to="/login" replace />;
   return (
     <Surface>
       <section className="my-auto rounded-3xl border border-slate-800 bg-slate-950/80 p-8">
@@ -319,6 +586,7 @@ export function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/app/*" element={<ProtectedRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

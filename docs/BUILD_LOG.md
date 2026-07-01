@@ -149,3 +149,49 @@ Public dashboard/login foundation only. No onboarding UI, app shell, repository 
 - Real GitHub OAuth still requires external OAuth app credentials and callback configuration.
 - The protected `/app/*` target is intentionally only a guard placeholder; the real app shell belongs to Phase 1B-C.
 - The first `npm run db:validate` attempt without `DATABASE_URL` failed as expected in this shell; validation passes when the test database URL is provided, matching CI behavior.
+
+## 2026-07-01 — Phase 1B-B privacy-first onboarding UI
+
+### Scope
+
+Onboarding dashboard UI only. No app shell, repository connection, agent linking, collection, activity sessions, timeline, reports or exports were started.
+
+### Implementation
+
+- Added `/onboarding` as a protected dashboard route.
+- Added a five-step flow:
+  1. welcome and product goal;
+  2. personal workspace confirmation;
+  3. how GhostCommit works;
+  4. data never collected;
+  5. consent and user control.
+- Added the required two-column transparency screen:
+  - `GhostCommit peut utiliser`;
+  - `GhostCommit ne peut jamais utiliser`.
+- Required both confirmations before consent can be submitted:
+  - the user has read the collection notice;
+  - the user understands they keep control of data and reports.
+- Connected onboarding to `GET /api/v1/onboarding/status` and `PATCH /api/v1/onboarding/status`.
+- Added loading, error, refresh/resume, back navigation and non-sensitive step persistence.
+- Updated `/login`, `/auth/callback` and `/app/*` flow so authenticated users without consent are routed through onboarding first.
+- Explicitly avoided activating collection: no agent call, repository call, activity/session call, report call, or local tracking behavior was added.
+
+### TDD and validation results
+
+- RED: dashboard tests failed because `/onboarding` was absent and `/app/*` did not enforce consent.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 9/9 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+
+### Full verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 2/2 and dashboard 9/9.
+- `npm run build`: passed.
+- `git diff --check`: passed.

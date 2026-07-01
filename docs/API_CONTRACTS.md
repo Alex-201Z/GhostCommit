@@ -71,3 +71,44 @@ Protected client route guard only in Phase 1B-A. It attempts `POST /auth/refresh
 - Refresh tokens are transported only by the existing HttpOnly cookie.
 - Access tokens are not written to `localStorage`, `sessionStorage`, URL query parameters, or hash fragments.
 - OAuth `code`, `state`, provider errors and tokens are never echoed in UI errors.
+
+## Phase 1B-B dashboard onboarding
+
+### `/onboarding`
+
+Protected dashboard route. It refreshes the existing HttpOnly-cookie session if needed, then reads `GET /onboarding/status` with the in-memory Bearer access token.
+
+The UI is a five-step privacy-first journey:
+
+1. welcome and product goal;
+2. personal workspace confirmation;
+3. how GhostCommit works;
+4. data never collected;
+5. consent and user control.
+
+The final step shows two columns:
+
+- `GhostCommit peut utiliser`;
+- `GhostCommit ne peut jamais utiliser`.
+
+The user cannot finish until both required confirmations are checked. Completion sends:
+
+```json
+{
+  "privacyPolicyAccepted": true,
+  "hasReadCollectionNotice": true,
+  "understandsDataControl": true,
+  "policyVersion": "2026-06-22",
+  "source": "ONBOARDING"
+}
+```
+
+to `PATCH /onboarding/status`.
+
+### Onboarding guard behavior
+
+- Authenticated users without consent are redirected from `/app/*` to `/onboarding`.
+- Authenticated users on `/login` are redirected to `/onboarding`; completed onboarding can then route onward to `/app`.
+- `/onboarding` redirects anonymous users to `/login`.
+- Intermediate onboarding step progress may be stored locally as a non-sensitive step index. Tokens, OAuth parameters, file paths, project data, secrets and activity data are never stored there.
+- Finishing onboarding does not start the agent, connect repositories, create sessions, or activate collection.
