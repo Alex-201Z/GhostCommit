@@ -651,3 +651,43 @@ Passing CI steps:
 ### Gate decision
 
 Phase 3G dashboard agent link request flow is complete locally and validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3H agent link confirmation foundations
+
+### Scope
+
+Agent-local foundations for consuming dashboard pairing links:
+
+- parse `ghostcommit://agent/link?code=GC-XXXXXX`;
+- reject invalid schemes, paths and codes with generic errors;
+- require explicit user confirmation before confirming a link;
+- call the existing `POST /api/v1/agent/link/confirm` contract through an injectable API boundary;
+- keep watcher, heartbeat, local project scanning and session sync inactive.
+
+No rendered Electron confirmation UI, protocol registration, secure device-token persistence, heartbeat activation, file watching, local scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The parser returns only a validated pairing code and never exposes extra query parameters.
+- The confirmation payload contains only link code, device label, OS family and agent version.
+- The user-session token required by the current backend JWT guard is passed only to the confirmation call and is not persisted by this foundation.
+- The returned device token is left to a later secure persistence subphase; it is not logged, rendered, or used to start heartbeat here.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentLinking.test.ts` failed because `agentLinking` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- agentLinking.test.ts` passed with 4/4 tests after adding `AgentLinkingService` and the API client confirmation method.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 11/11, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3H agent link confirmation foundations are complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { ConfigManager } from '../utils/config';
+import { AgentLinkConfirmation, AgentLinkConfirmPayload } from './agentLinking';
 
 export interface ActivitySessionData {
   startTime: string;
@@ -71,6 +72,24 @@ export class ApiClient {
     } catch (error: any) {
       console.error('Error getting repos:', error.message);
       return [];
+    }
+  }
+
+  async confirmAgentLink(
+    payload: AgentLinkConfirmPayload,
+    userAccessToken: string,
+  ): Promise<AgentLinkConfirmation> {
+    try {
+      const response = await this.client.post('/agent/link/confirm', payload, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+        },
+      });
+      return response.data as AgentLinkConfirmation;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error confirming agent link:', message);
+      throw error;
     }
   }
 

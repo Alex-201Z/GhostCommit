@@ -513,3 +513,13 @@ La Phase 3G branche `/app/settings/agent` sur `POST /api/v1/agent/link-request` 
 - le dashboard affiche le code temporaire, le deep link et l'expiration ;
 - aucun token appareil, hash de token, hostname, identifiant machine, chemin local, contenu de fichier, diff, session ou rapport n'est affiché ;
 - la création du code ne confirme pas l'installation, ne démarre pas le heartbeat, le watcher, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Fondations confirmation agent Phase 3H
+
+La Phase 3H ajoute les primitives locales côté agent pour confirmer une liaison :
+
+- parsing strict de `ghostcommit://agent/link?code=GC-XXXXXX` ;
+- rejet générique des liens ou codes invalides ;
+- confirmation impossible sans action explicite utilisateur ;
+- appel préparé vers `POST /api/v1/agent/link/confirm` avec uniquement code, libellé appareil, OS et version agent ;
+- aucun watcher, heartbeat, scan local, synchronisation de sessions, rapport, export ou partage n'est démarré par cette fondation.

@@ -141,3 +141,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The form accepts only a user-facing device label, OS family and agent version.
 - The UI displays the temporary pairing code, deep link and expiry, but never displays an agent token, token hash, hostname, stable machine identifier, local path, file content, code diff, session payload or report data.
 - Creating a link request does not confirm an installation, start heartbeat, scan local projects, watch files, synchronize sessions, generate reports, export or share data.
+
+## Phase 3H agent link confirmation boundary
+
+- The agent accepts only GhostCommit deep links shaped like `ghostcommit://agent/link?code=GC-XXXXXX`.
+- The link parser returns only the validated pairing code and never exposes extra query parameters.
+- Link confirmation requires an explicit user confirmation flag before any backend call.
+- The confirmation payload contains only the pairing code and non-identifying agent metadata.
+- This foundation does not persist device tokens, start heartbeat, watch folders, scan projects, synchronize sessions, generate reports, export or share data.

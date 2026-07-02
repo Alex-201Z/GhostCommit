@@ -435,3 +435,17 @@ Client guarantees:
 - displays only the short-lived link code, deep link and expiry returned by the backend;
 - never asks for or renders token material, token hashes, raw hostnames, stable machine identifiers, local paths, file contents, code diffs, sessions, reports or exports;
 - does not call heartbeat, activity, session, report, export or agent sync endpoints.
+
+## Phase 3H agent link confirmation foundations
+
+Phase 3H adds local agent foundations for consuming a dashboard pairing link. The agent can parse a `ghostcommit://agent/link?code=GC-XXXXXX` deep link and prepare a confirmation call to the existing `POST /agent/link/confirm` endpoint only after explicit user confirmation.
+
+### Agent-local guarantees
+
+- invalid schemes, paths and link codes are rejected with a generic error;
+- unsafe query parameters are ignored and never returned to the UI;
+- confirmation sends only `linkCode`, `deviceLabel`, optional `osFamily` and optional `agentVersion`;
+- confirmation uses an injected user-session token for the backend's existing JWT guard and does not persist that user token;
+- confirming a link does not start file watching, project scanning, heartbeat, activity session sync, report generation, export or sharing.
+
+The Electron confirmation UI, secure device-token persistence and automatic heartbeat start remain follow-up work inside Phase 3.
