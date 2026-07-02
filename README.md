@@ -523,3 +523,13 @@ La Phase 3H ajoute les primitives locales côté agent pour confirmer une liaiso
 - confirmation impossible sans action explicite utilisateur ;
 - appel préparé vers `POST /api/v1/agent/link/confirm` avec uniquement code, libellé appareil, OS et version agent ;
 - aucun watcher, heartbeat, scan local, synchronisation de sessions, rapport, export ou partage n'est démarré par cette fondation.
+
+## Stockage token agent et heartbeat Phase 3I
+
+La Phase 3I ajoute les primitives locales suivantes :
+
+- stockage du token appareil via une interface de coffre sécurisé injectable ;
+- aucune écriture du token appareil dans `config.json` ;
+- suppression du token via la même interface ;
+- heartbeat explicite vers `POST /api/v1/agent/heartbeat` avec le token appareil ;
+- aucun body de heartbeat, watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.

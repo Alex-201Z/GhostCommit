@@ -86,4 +86,29 @@ describe('AgentLinkingService privacy-safe link confirmation', () => {
     expect(startWatching).not.toHaveBeenCalled();
     expect(syncSessions).not.toHaveBeenCalled();
   });
+
+  it('persists the returned device token through the credential store after confirmation', async () => {
+    const confirmLink = vi.fn().mockResolvedValue({
+      installation: {
+        id: 'agent-1',
+        deviceLabel: 'Laptop dev',
+        status: 'CONNECTED',
+      },
+      agentToken: 'gca_device_token',
+      tokenExpiresAt: '2026-10-01T12:00:00.000Z',
+    });
+    const saveDeviceToken = vi.fn();
+    const service = new AgentLinkingService({ confirmLink, saveDeviceToken });
+
+    await service.confirmLink(
+      {
+        linkCode: 'GC-ABCD23',
+        deviceLabel: 'Laptop dev',
+        userAccessToken: 'user-session-token',
+      },
+      { confirmed: true },
+    );
+
+    expect(saveDeviceToken).toHaveBeenCalledWith('gca_device_token');
+  });
 });

@@ -93,6 +93,25 @@ export class ApiClient {
     }
   }
 
+  async sendAgentHeartbeat(agentToken: string): Promise<AgentLinkConfirmation['installation']> {
+    try {
+      const response = await this.client.post(
+        '/agent/heartbeat',
+        undefined,
+        {
+          headers: {
+            Authorization: `Bearer ${agentToken}`,
+          },
+        },
+      );
+      return response.data as AgentLinkConfirmation['installation'];
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error sending agent heartbeat:', message);
+      throw error;
+    }
+  }
+
   isAuthenticated(): boolean {
     return this.config.isAuthenticated();
   }

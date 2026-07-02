@@ -149,3 +149,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - Link confirmation requires an explicit user confirmation flag before any backend call.
 - The confirmation payload contains only the pairing code and non-identifying agent metadata.
 - This foundation does not persist device tokens, start heartbeat, watch folders, scan projects, synchronize sessions, generate reports, export or share data.
+
+## Phase 3I secure device token and heartbeat boundary
+
+- The agent device token is stored through an injectable secure vault, not in `config.json`.
+- The keychain integration is lazy-loaded so test environments do not need native secret storage at module import time.
+- Clearing the agent credential removes the device token from the same vault boundary.
+- Heartbeat is an explicit device-status call with no request body.
+- Sending heartbeat does not start watchers, scan projects, synchronize sessions, generate reports, export or share data.

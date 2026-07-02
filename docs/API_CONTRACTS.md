@@ -449,3 +449,29 @@ Phase 3H adds local agent foundations for consuming a dashboard pairing link. Th
 - confirming a link does not start file watching, project scanning, heartbeat, activity session sync, report generation, export or sharing.
 
 The Electron confirmation UI, secure device-token persistence and automatic heartbeat start remain follow-up work inside Phase 3.
+
+## Phase 3I secure agent token storage and explicit heartbeat
+
+Phase 3I adds local agent primitives for storing the one-time device token returned by link confirmation and sending a heartbeat only when explicitly invoked.
+
+### Agent credential store
+
+The agent stores the device token through an injected secure vault interface. The default implementation lazy-loads `keytar` so tests and CI do not require the native module to be initialized at import time.
+
+Guarantees:
+
+- device tokens are not written to `config.json`;
+- user-session tokens used for link confirmation are not persisted;
+- credentials can be cleared through the same vault interface;
+- the service does not expose token material in public status objects.
+
+### Explicit heartbeat
+
+The heartbeat client calls:
+
+```http
+POST /agent/heartbeat
+Authorization: Bearer <agent-token>
+```
+
+The call is explicit and has no request body. It does not start file watching, project scanning, activity session sync, report generation, export or sharing.

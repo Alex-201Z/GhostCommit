@@ -31,6 +31,7 @@ export interface AgentLinkConfirmationOptions {
 
 export interface AgentLinkingDependencies {
   confirmLink: (payload: AgentLinkConfirmPayload, userAccessToken: string) => Promise<AgentLinkConfirmation>;
+  saveDeviceToken?: (agentToken: string) => Promise<void> | void;
   startWatching?: () => void;
   syncSessions?: () => void;
 }
@@ -74,6 +75,8 @@ export class AgentLinkingService {
       ...(input.agentVersion ? { agentVersion: input.agentVersion } : {}),
     };
 
-    return this.dependencies.confirmLink(payload, input.userAccessToken);
+    const confirmation = await this.dependencies.confirmLink(payload, input.userAccessToken);
+    await this.dependencies.saveDeviceToken?.(confirmation.agentToken);
+    return confirmation;
   }
 }

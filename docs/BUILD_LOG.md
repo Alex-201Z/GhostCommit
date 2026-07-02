@@ -691,3 +691,69 @@ No rendered Electron confirmation UI, protocol registration, secure device-token
 ### Gate decision
 
 Phase 3H agent link confirmation foundations are complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3H was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28610029884
+- Job: `quality`
+- Head SHA: `9b9b337`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+## 2026-07-02 — Phase 3I secure token storage and explicit heartbeat
+
+### Scope
+
+Agent-local credential and heartbeat primitives:
+
+- store the one-time device token through an injectable secure vault;
+- keep the token out of `config.json`;
+- clear the device token through the same vault boundary;
+- persist the returned device token after confirmed link success;
+- expose an explicit heartbeat service that uses the stored device token;
+- add an API client method for bodyless `POST /agent/heartbeat`.
+
+No rendered Electron confirmation UI, protocol registration, heartbeat scheduler, watcher activation, local project scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The default vault lazy-loads `keytar` so native secret storage is not imported during tests or CI module loading.
+- Device token persistence is behind an injectable interface and is test-covered without touching real OS keychains.
+- The user-session token used for link confirmation remains transient and is not persisted by the agent.
+- Heartbeat sends only the device token in the Authorization header and no request body.
+- Heartbeat does not start or imply collection; it is device connectivity only, not presence or productivity.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentCredentials.test.ts agentHeartbeat.test.ts agentLinking.test.ts` failed because `agentCredentials` and `agentHeartbeat` did not exist, and `AgentLinkingService` did not persist the returned device token.
+- GREEN: the same targeted command passed with 9/9 tests after adding secure credential storage, explicit heartbeat and token persistence after link confirmation.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 16/16, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3I secure token storage and explicit heartbeat is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
