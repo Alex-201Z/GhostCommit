@@ -626,6 +626,28 @@ No Electron deep-link handling, device confirmation, token issuance in the dashb
 - `npm run build`: passed across backend, agent, dashboard and shared workspaces.
 - `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
 
+### GitHub Actions validation
+
+Phase 3G was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28609390636
+- Job: `quality`
+- Head SHA: `1960330`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
 ### Gate decision
 
-Phase 3G dashboard agent link request flow is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+Phase 3G dashboard agent link request flow is complete locally and validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
