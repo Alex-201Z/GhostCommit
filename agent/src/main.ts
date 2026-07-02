@@ -13,6 +13,7 @@ import { AgentLinkingService } from './services/agentLinking';
 import { AgentLinkFlow } from './services/agentLinkFlow';
 import { extractGhostCommitLink, GhostCommitProtocolHandler } from './services/agentProtocol';
 import { AgentConnectionControlService } from './services/agentConnectionControl';
+import { createPrivacySafeWatchControls } from './services/trayPrivacy';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -107,6 +108,9 @@ class GhostCommitAgent {
     const isAuthenticated = this.apiClient.isAuthenticated();
     const activeSession = this.activityTracker.getActiveSession();
     const watchedPaths = this.fileWatcher.getWatchedPaths();
+    const watchControls = createPrivacySafeWatchControls(watchedPaths, {
+      openFolder: (localPath) => shell.showItemInFolder(localPath),
+    });
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -128,17 +132,12 @@ class GhostCommitAgent {
         click: () => this.showDashboard(),
       },
       {
-        label: `Dossiers surveillés (${watchedPaths.length})`,
-        submenu: watchedPaths.length > 0
-          ? watchedPaths.map((p) => ({
-              label: p,
-              click: () => shell.showItemInFolder(p),
-            }))
-          : [{ label: 'Aucun dossier', enabled: false }],
+        label: watchControls.watchSummary.label,
+        submenu: watchControls.watchSummary.items,
       },
       {
-        label: 'Ajouter un dossier',
-        click: () => this.addWatchFolder(),
+        label: watchControls.addProjectLabel,
+        click: () => this.showProjectAuthorizationGuidance(),
       },
       { type: 'separator' },
       {
@@ -238,40 +237,24 @@ class GhostCommitAgent {
     return 'linux';
   }
 
-  private async addWatchFolder(): Promise<void> {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-      title: 'Sélectionner un dossier à surveiller',
-    });
-
-    if (!result.canceled && result.filePaths.length > 0) {
-      const folderPath = result.filePaths[0];
-      this.config.addWatchPath(folderPath);
-      this.fileWatcher.watchPath(folderPath);
-      this.updateTrayMenu();
-
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Dossier ajouté',
-        message: `Le dossier est maintenant surveillé:\n${folderPath}`,
-      });
-    }
-  }
-
-  private showSetupDialog(): void {
-    dialog
+  private showProjectAuthorizationGuidance(): void {
+    void dialog
       .showMessageBox({
         type: 'info',
-        title: 'Bienvenue sur GhostCommit',
+        title: 'Autorisation de projet requise',
         message:
-          'Pour commencer, ajoutez les dossiers de vos projets que vous souhaitez surveiller.',
-        buttons: ['Ajouter un dossier', 'Plus tard'],
+          'La sélection locale de dossiers sera disponible uniquement via le flux explicite d’autorisation de projet. Aucune surveillance n’a été démarrée.',
+        buttons: ['Ouvrir le dashboard', 'Plus tard'],
       })
       .then((result) => {
         if (result.response === 0) {
-          this.addWatchFolder();
+          this.showDashboard();
         }
       });
+  }
+
+  private showSetupDialog(): void {
+    this.showProjectAuthorizationGuidance();
   }
 
   private showDashboard(): void {

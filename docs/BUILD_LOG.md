@@ -976,3 +976,45 @@ Passing CI steps:
 ### CI gate decision
 
 Phase 3K local agent disconnect control is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3L tray privacy hardening
+
+### Scope
+
+Agent tray hardening for legacy local-folder controls:
+
+- summarize configured local folders by count only;
+- stop rendering absolute paths in tray labels;
+- disable tray folder-opening behavior;
+- replace the legacy add-folder picker with dashboard authorization guidance.
+
+No backend endpoint, watcher activation, local folder scan, heartbeat, session synchronization, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The tray can acknowledge local configuration without exposing absolute paths.
+- Local folder selection remains blocked until a later explicit project/session phase owns it.
+- User guidance can open the dashboard, but it does not start collection.
+- The hardening is intentionally local; it does not mutate backend projects or agent installations.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because `trayPrivacy` did not exist.
+- GREEN: the same targeted command passed after adding count-only tray controls.
+- `npm run test --workspace @ghostcommit/agent`: passed with 25/25 tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 25/25, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3L tray privacy hardening is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.

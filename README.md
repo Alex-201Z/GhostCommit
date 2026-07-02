@@ -555,3 +555,12 @@ La Phase 3K ajoute un contrôle local utilisateur dans l'agent Electron :
 - aucun appel heartbeat, synchronisation de sessions, révocation distante, rapport, export ou partage déclenché.
 
 Cette action est locale. La révocation serveur reste contrôlée depuis le dashboard via l'endpoint propriétaire existant.
+
+## Durcissement tray legacy Phase 3L
+
+La Phase 3L neutralise les anciens contrôles Electron qui pouvaient démarrer une surveillance locale hors flux explicite :
+
+- le menu tray n'affiche plus les chemins absolus des dossiers configurés ;
+- le sous-menu affiche uniquement un résumé par nombre ;
+- l'action legacy `Ajouter un dossier` devient une guidance vers le dashboard ;
+- aucun picker local, watcher, scan, synchronisation de sessions, rapport, export ou partage n'est déclenché.

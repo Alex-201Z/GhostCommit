@@ -506,3 +506,15 @@ Agent-local behavior:
 - does not call heartbeat, session synchronization, report generation, export, sharing or remote revocation.
 
 Remote revocation remains the existing user-owned dashboard/API flow: `POST /agent/installations/:id/revoke`.
+
+## Phase 3L tray privacy hardening
+
+Phase 3L adds no backend endpoint. It neutralizes legacy Electron tray controls until later explicit project/session phases own local folder activation.
+
+Agent-local behavior:
+
+- watched local folders are summarized by count only in the tray;
+- absolute paths are not rendered in tray menu labels;
+- local folder opening from the tray is disabled;
+- the legacy add-folder control shows dashboard authorization guidance instead of opening a folder picker;
+- no watcher, project scan, heartbeat, session synchronization, report generation, export or sharing is started.

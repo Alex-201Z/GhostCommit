@@ -172,3 +172,10 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The same action clears the legacy user token and stops active watchers/activity tracking.
 - Disconnecting locally does not call heartbeat, synchronize sessions, revoke a remote installation, generate reports, export or share data.
 - Server-side revocation remains an explicit dashboard/API action owned by the authenticated user.
+
+## Phase 3L tray privacy hardening boundary
+
+- Legacy watched folder entries are not displayed as absolute paths in the tray.
+- The tray shows only a count-based local summary while collection remains inactive.
+- The legacy add-folder path picker is disabled and replaced with guidance to the explicit dashboard/project authorization flow.
+- This hardening does not start watchers, scan folders, synchronize sessions, heartbeat, generate reports, export or share data.
