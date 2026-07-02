@@ -107,6 +107,58 @@ Validation only. No Phase 1B UI, repository connection, agent, collection or rep
 
 The Phase 1A PostgreSQL validation gate is closed on the PR branch. Phase 1A can be considered validated once the final documentation-only run remains green and the PR is merged into `main`. Phase 1B remains unstarted.
 
+## 2026-07-02 — Phase 1A PostgreSQL CI gate re-audit
+
+### Scope
+
+Re-verify the already merged Phase 1A validation gate against the current repository state and the historical GitHub Actions evidence. No Phase 1B UI, public page, onboarding UI, app shell, repository connection, agent, reporting or product-scope code was added.
+
+### CI contract re-verified
+
+- `.github/workflows/ci.yml` starts PostgreSQL with `postgres:16-alpine`.
+- `DATABASE_URL` targets `postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`.
+- Dependencies install with `npm ci --ignore-scripts`.
+- Prisma Client generation runs before `prisma migrate deploy`.
+- `prisma migrate deploy` runs before `npm run test:e2e --workspace @ghostcommit/backend`.
+- `RUN_DATABASE_TESTS=true` is defined in CI.
+- `backend/test/auth.e2e-spec.ts` throws when `CI=true` and `RUN_DATABASE_TESTS=true` is missing, so PostgreSQL e2e cannot be silently skipped in CI.
+
+### Phase 1A scenario coverage
+
+The original merged Phase 1A test file at commit `7770ac2` contains exactly six PostgreSQL scenarios:
+
+1. invalid, expired and consumed OAuth state, with no secret echoing;
+2. user creation/reconnection and single personal workspace creation;
+3. refresh token rotation, replay rejection and family revocation;
+4. versioned consent, personal workspace idempotence and no collection activation;
+5. user A/B ownership protection through strict DTO validation;
+6. logout revocation, cookie clearing and no secret echoing in refresh errors.
+
+The current `backend/test/auth.e2e-spec.ts` still contains those six scenarios; later Phase 3 PostgreSQL scenarios are additional coverage and are not part of the Phase 1A gate.
+
+### Evidence
+
+- Historical passing GitHub Actions run: https://github.com/Alex-201Z/GhostCommit/actions/runs/27988421002
+- Job: `quality`
+- Head SHA: `18a92465d4f10abe58f4a8fbcb064e3d6da0661a`
+- Result: `SUCCESS`
+- Passing steps included container initialization, dependency installation, Prisma generation, migration deploy, lint, typecheck, unit tests, PostgreSQL integration tests and build.
+
+Fresh local checks on 2026-07-02:
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `CI=true` without `RUN_DATABASE_TESTS=true` plus `npm run test:e2e --workspace @ghostcommit/backend`: failed with the expected hard error preventing silent skips.
+- `npm test`: passed; backend 10/10, agent 22/22, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+
+### Gate decision
+
+Phase 1A can be considered validated against real PostgreSQL via GitHub Actions CI. No Phase 1B work was started during this re-audit.
+
 ## 2026-07-01 — Phase 1B-A public interface and login
 
 ### Scope
@@ -829,3 +881,29 @@ No custom rendered Electron window, watcher activation, local project scan, acti
 ### Gate decision
 
 Phase 3J Electron protocol and confirmation flow is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3J was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28611092637
+- Job: `quality`
+- Head SHA: `12adf33`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### CI gate decision
+
+Phase 3J Electron protocol and confirmation flow is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
