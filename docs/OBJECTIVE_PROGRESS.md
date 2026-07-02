@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete locally and awaiting CI validation after push. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -96,6 +96,12 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - credential clearing removes the stored device token through the same vault;
   - heartbeat is an explicit call using the stored device token and has no request body;
   - heartbeat does not start watchers, project scanning, session sync, reporting, export or sharing.
+- Phase 3J Electron protocol and confirmation flow:
+  - the agent extracts only `ghostcommit://agent/link?...` links from startup and second-instance arguments;
+  - links are queued until the agent is initialized;
+  - a user confirmation prompt is required before backend confirmation;
+  - cancellation and invalid links do not persist credentials or heartbeat;
+  - successful linking sends one explicit heartbeat and still does not start watchers, scans, sync, reporting, export or sharing.
 
 ## Current technical decisions
 
@@ -114,6 +120,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3G keeps device confirmation and token issuance in the existing backend confirm endpoint; the dashboard only starts the pairing request and never sees the future agent token.
 - Phase 3H keeps user-session handoff injectable because the existing backend confirm endpoint is JWT-guarded; the agent does not persist that user token in this foundation.
 - Phase 3I treats heartbeat as a user/device control-plane signal only; it must not be used as presence, productivity or performance evidence.
+- Phase 3J keeps the Electron prompt minimal and non-sensitive; a richer rendered confirmation UI can replace the dialog later without changing the service boundary.
 
 ## Important files modified in the current Phase 3B subphase
 
@@ -211,6 +218,19 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `docs/OBJECTIVE_PROGRESS.md`
 - `README.md`
 
+## Important files modified in the current Phase 3J subphase
+
+- `agent/src/main.ts`
+- `agent/src/services/agentProtocol.ts`
+- `agent/src/services/agentProtocol.test.ts`
+- `agent/src/services/agentLinkFlow.ts`
+- `agent/src/services/agentLinkFlow.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/BUILD_LOG.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
 ## Migrations
 
 - `20260701_phase_3a_projects_agent_foundations`: adds agent link/install tables, agent/project status enums, local project provider, and project privacy fields.
@@ -230,6 +250,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Local PostgreSQL/Docker remains unavailable in this environment; backend migration/e2e validation depends on GitHub Actions PostgreSQL 16 when backend schema or database behavior changes.
 - Phase 3G does not yet implement the Electron-side deep link handler or confirmation screen; that remains inside Phase 3 before real local pairing is usable.
 - Phase 3I does not yet implement the rendered Electron confirmation UI, protocol registration, or automatic heartbeat scheduling after confirmation.
+- Phase 3J uses Electron dialogs for confirmation rather than a custom rendered window; this is acceptable for the current linking gate but can be replaced in a later polish subphase.
 
 ## Tests executed
 
@@ -377,6 +398,21 @@ Phase 3I targeted checks on 2026-07-02:
 - `git diff --check`: passed with CRLF warnings only.
 - GitHub Actions CI run `28610478740` on PR #5: passed with PostgreSQL 16, `npm ci --ignore-scripts`, migration deploy, lint, typecheck, unit tests, PostgreSQL e2e and build for head SHA `611739c`.
 
+Phase 3J targeted checks on 2026-07-02:
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts` failed because `agentProtocol` and `agentLinkFlow` did not exist.
+- GREEN: the same targeted command passed with 6/6 tests after adding protocol extraction/queueing and the confirmation orchestration flow.
+- `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts agentLinking.test.ts agentHeartbeat.test.ts agentCredentials.test.ts`: passed with 15/15 targeted tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 22/22, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -384,4 +420,4 @@ Phase 3I targeted checks on 2026-07-02:
 
 ## Next exact task
 
-Implement Phase 3J Electron protocol/deep-link handling and user confirmation UI wiring around the existing link-confirmation services, without starting watchers, scans, session sync, reports, export or sharing.
+Commit Phase 3J atomically, push the branch, verify GitHub Actions, then continue within Phase 3 without starting Phase 4.

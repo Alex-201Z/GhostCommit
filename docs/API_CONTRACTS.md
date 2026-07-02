@@ -475,3 +475,21 @@ Authorization: Bearer <agent-token>
 ```
 
 The call is explicit and has no request body. It does not start file watching, project scanning, activity session sync, report generation, export or sharing.
+
+## Phase 3J Electron protocol and confirmation flow
+
+Phase 3J wires the agent foundations into Electron-level deep-link handling:
+
+- register the `ghostcommit://` protocol with the desktop app;
+- extract `ghostcommit://agent/link?code=GC-XXXXXX` links from startup or second-instance arguments;
+- queue received links until the agent is initialized;
+- show a user confirmation prompt before any backend confirmation call;
+- confirm the link with the existing safe metadata boundary;
+- send one explicit heartbeat after successful confirmation.
+
+Guarantees:
+
+- invalid links are rejected with a generic error and unsafe query parameters are never surfaced;
+- cancellation does not confirm the agent, persist a token or heartbeat;
+- successful linking does not start file watching, project scanning, activity session sync, report generation, export or sharing;
+- the confirmation UI displays only the pairing code and non-sensitive explanatory copy.

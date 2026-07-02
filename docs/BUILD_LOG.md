@@ -783,3 +783,49 @@ Passing CI steps:
 ### CI gate decision
 
 Phase 3I secure token storage and explicit heartbeat is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3J Electron protocol and confirmation flow
+
+### Scope
+
+Electron-level agent linking flow:
+
+- extracts `ghostcommit://agent/link?code=GC-XXXXXX` links from process arguments;
+- queues protocol links until the agent is initialized;
+- registers the `ghostcommit` protocol with Electron;
+- handles macOS `open-url` and second-instance startup arguments;
+- prompts the user before confirming an agent link;
+- confirms the link through the existing link service;
+- sends one explicit heartbeat after successful confirmation.
+
+No custom rendered Electron window, watcher activation, local project scan, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Only `ghostcommit://agent/link?...` arguments are handled; unrelated URLs or arguments are ignored.
+- Invalid links return a generic message without echoing unsafe query values.
+- User cancellation performs no backend call, credential persistence or heartbeat.
+- The confirmation prompt displays only the pairing code and privacy-safe explanatory text.
+- Successful linking still does not start file watching, local scanning, session sync, reporting, export or sharing.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts` failed because `agentProtocol` and `agentLinkFlow` did not exist.
+- GREEN: the same targeted command passed with 6/6 tests after adding protocol extraction/queueing and the confirmation orchestration flow.
+- `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts agentLinking.test.ts agentHeartbeat.test.ts agentCredentials.test.ts`: passed with 15/15 targeted tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 22/22, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3J Electron protocol and confirmation flow is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.

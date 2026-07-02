@@ -157,3 +157,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - Clearing the agent credential removes the device token from the same vault boundary.
 - Heartbeat is an explicit device-status call with no request body.
 - Sending heartbeat does not start watchers, scan projects, synchronize sessions, generate reports, export or share data.
+
+## Phase 3J Electron protocol and confirmation boundary
+
+- The Electron app handles only GhostCommit agent-link deep links and ignores unrelated URLs or arguments.
+- Deep links are queued until the agent is initialized so no startup race starts collection.
+- The user must confirm the link before the backend confirmation call.
+- Cancelled or invalid links do not persist credentials, heartbeat, watch folders, scan projects, synchronize sessions, generate reports, export or share data.
+- Successful linking sends one explicit heartbeat as device connectivity only; it is not presence or productivity evidence.

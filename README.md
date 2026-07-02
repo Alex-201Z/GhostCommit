@@ -533,3 +533,13 @@ La Phase 3I ajoute les primitives locales suivantes :
 - suppression du token via la même interface ;
 - heartbeat explicite vers `POST /api/v1/agent/heartbeat` avec le token appareil ;
 - aucun body de heartbeat, watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.
+
+## Protocole Electron Phase 3J
+
+La Phase 3J branche les fondations de liaison dans l'agent Electron :
+
+- gestion de `ghostcommit://agent/link?code=GC-XXXXXX` au démarrage ou via seconde instance ;
+- mise en file des liens jusqu'à initialisation de l'agent ;
+- confirmation utilisateur obligatoire avant appel backend ;
+- envoi d'un heartbeat explicite après liaison réussie ;
+- aucun watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.

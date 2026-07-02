@@ -7,6 +7,11 @@ import { GitDetector } from './services/gitDetector';
 import { StorageService } from './services/storage';
 import { ActivityTracker } from './services/activityTracker';
 import { getStartupPolicy } from './services/startupPolicy';
+import { AgentCredentialStore } from './services/agentCredentials';
+import { AgentHeartbeatService } from './services/agentHeartbeat';
+import { AgentLinkingService } from './services/agentLinking';
+import { AgentLinkFlow } from './services/agentLinkFlow';
+import { extractGhostCommitLink, GhostCommitProtocolHandler } from './services/agentProtocol';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -17,6 +22,10 @@ class GhostCommitAgent {
   private gitDetector: GitDetector;
   private storage: StorageService;
   private activityTracker: ActivityTracker;
+  private credentials: AgentCredentialStore;
+  private heartbeat: AgentHeartbeatService;
+  private linkFlow: AgentLinkFlow;
+  private protocolHandler: GhostCommitProtocolHandler;
 
   constructor() {
     this.config = new ConfigManager();
@@ -24,12 +33,27 @@ class GhostCommitAgent {
     this.fileWatcher = new FileWatcher();
     this.gitDetector = new GitDetector();
     this.storage = new StorageService();
+    this.credentials = new AgentCredentialStore();
     this.activityTracker = new ActivityTracker(
       this.fileWatcher,
       this.gitDetector,
       this.apiClient,
       this.storage,
     );
+    const linking = new AgentLinkingService({
+      confirmLink: (payload, userAccessToken) => this.apiClient.confirmAgentLink(payload, userAccessToken),
+      saveDeviceToken: (agentToken) => this.credentials.saveDeviceToken(agentToken),
+    });
+    this.heartbeat = new AgentHeartbeatService({
+      getDeviceToken: () => this.credentials.getDeviceToken(),
+      heartbeat: (agentToken) => this.apiClient.sendAgentHeartbeat(agentToken),
+    });
+    this.linkFlow = new AgentLinkFlow({
+      confirmLink: (input, options) => linking.confirmLink(input, options),
+      sendHeartbeat: () => this.heartbeat.sendHeartbeat(),
+      requestUserConfirmation: (linkCode) => this.requestAgentLinkConfirmation(linkCode),
+    });
+    this.protocolHandler = new GhostCommitProtocolHandler((linkUrl) => this.handleAgentLink(linkUrl));
 
     this.setupActivityTrackerListeners();
   }
@@ -48,6 +72,12 @@ class GhostCommitAgent {
       // If no paths configured, show setup dialog
       this.showSetupDialog();
     }
+
+    await this.protocolHandler.markReady();
+  }
+
+  receiveProtocolLink(linkUrl: string): void {
+    this.protocolHandler.receive(linkUrl);
   }
 
   private createTray(): void {
@@ -136,6 +166,64 @@ class GhostCommitAgent {
         );
       }
     });
+  }
+
+  private async requestAgentLinkConfirmation(linkCode: string) {
+    const userAccessToken = this.config.getToken();
+    if (!userAccessToken) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Connexion requise',
+        message: 'Connectez-vous au dashboard avant de lier cet agent. Aucune collecte n’a été démarrée.',
+      });
+      return { confirmed: false };
+    }
+
+    const result = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Lier cet agent GhostCommit',
+      message:
+        'Confirmez la liaison de cet agent local. GhostCommit ne démarrera pas de surveillance ni de synchronisation de sessions.',
+      detail: `Code de liaison : ${linkCode}`,
+      buttons: ['Lier cet agent', 'Annuler'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    return {
+      confirmed: result.response === 0,
+      userAccessToken,
+      deviceLabel: 'GhostCommit local agent',
+      osFamily: this.getOsFamily(),
+      agentVersion: app.getVersion(),
+    };
+  }
+
+  private async handleAgentLink(linkUrl: string): Promise<void> {
+    const result = await this.linkFlow.handleLink(linkUrl);
+    if (result.status === 'linked') {
+      this.updateTrayMenu();
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Agent lié',
+        message: 'L’agent est lié. Aucune collecte n’a été démarrée.',
+      });
+      return;
+    }
+
+    if (result.status === 'error') {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Liaison impossible',
+        message: result.message,
+      });
+    }
+  }
+
+  private getOsFamily(): 'windows' | 'macos' | 'linux' {
+    if (process.platform === 'win32') return 'windows';
+    if (process.platform === 'darwin') return 'macos';
+    return 'linux';
   }
 
   private async addWatchFolder(): Promise<void> {
@@ -227,7 +315,29 @@ class GhostCommitAgent {
 // App lifecycle
 app.whenReady().then(() => {
   const agent = new GhostCommitAgent();
-  agent.initialize();
+  app.setAsDefaultProtocolClient('ghostcommit');
+
+  app.on('open-url', (event, linkUrl) => {
+    event.preventDefault();
+    agent.receiveProtocolLink(linkUrl);
+  });
+
+  const startupLink = extractGhostCommitLink(process.argv);
+  if (startupLink) {
+    agent.receiveProtocolLink(startupLink);
+  }
+
+  const hasLock = app.requestSingleInstanceLock();
+  if (hasLock) {
+    app.on('second-instance', (_event, argv) => {
+      const linkUrl = extractGhostCommitLink(argv);
+      if (linkUrl) {
+        agent.receiveProtocolLink(linkUrl);
+      }
+    });
+  }
+
+  void agent.initialize();
 });
 
 // Prevent app from closing when all windows are closed (system tray app)
