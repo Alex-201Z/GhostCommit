@@ -503,3 +503,13 @@ La Phase 3F ajoute `POST /api/v1/agent/heartbeat` avec le token appareil `gca_*`
 - le heartbeat met à jour uniquement `lastSeenAt` et le statut public de l'installation ;
 - les agents connectés sans heartbeat récent deviennent `OFFLINE` lors du listing ;
 - aucun hostname, identifiant machine, chemin local, contenu de fichier, diff, secret, session ou rapport n'est accepté.
+
+## Liaison agent dashboard Phase 3G
+
+La Phase 3G branche `/app/settings/agent` sur `POST /api/v1/agent/link-request` :
+
+- l'utilisateur crée volontairement une demande de liaison ;
+- le formulaire envoie uniquement un libellé appareil, une famille OS et une version agent ;
+- le dashboard affiche le code temporaire, le deep link et l'expiration ;
+- aucun token appareil, hash de token, hostname, identifiant machine, chemin local, contenu de fichier, diff, session ou rapport n'est affiché ;
+- la création du code ne confirme pas l'installation, ne démarre pas le heartbeat, le watcher, la synchronisation de sessions, les rapports, l'export ou le partage.

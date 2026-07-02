@@ -1113,6 +1113,17 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [installations, setInstallations] = useState<AgentInstallation[]>([]);
   const [actionState, setActionState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [linkState, setLinkState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [linkRequest, setLinkRequest] = useState({
+    deviceLabel: '',
+    osFamily: 'windows',
+    agentVersion: '',
+  });
+  const [linkResult, setLinkResult] = useState<{
+    linkCode: string;
+    deepLink: string;
+    expiresAt: string;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -1155,6 +1166,32 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
     }
   }
 
+  async function createLinkRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLinkState('saving');
+    try {
+      const response = await fetch(`${API_BASE_URL}/agent/link-request`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...authHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceLabel: linkRequest.deviceLabel.trim(),
+          osFamily: linkRequest.osFamily,
+          agentVersion: linkRequest.agentVersion.trim(),
+        }),
+      });
+      if (!response.ok) throw new Error('Unable to create agent link request');
+      const body = await parseJson<{ linkCode: string; deepLink: string; expiresAt: string }>(response);
+      setLinkResult(body);
+      setLinkState('idle');
+    } catch {
+      setLinkState('error');
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
@@ -1167,6 +1204,77 @@ function AgentSettingsPage({ accessToken }: { accessToken: string }) {
           Télécharger / relancer l’agent
         </button>
       </div>
+      <form
+        onSubmit={createLinkRequest}
+        className="rounded-3xl border border-emerald-900/70 bg-emerald-950/20 p-6"
+        aria-label="Créer une liaison agent"
+      >
+        <h2 className="text-2xl font-semibold">Créer une demande de liaison</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+          Ces métadonnées sont non identifiantes. N’utilisez pas de nom système unique, identifiant matériel ou chemin local.
+        </p>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <label className="grid gap-2 text-sm text-slate-300">
+            Libellé appareil
+            <input
+              required
+              value={linkRequest.deviceLabel}
+              onChange={(event) => {
+                const { value } = event.currentTarget;
+                setLinkRequest((current) => ({ ...current, deviceLabel: value }));
+              }}
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+            />
+          </label>
+          <label className="grid gap-2 text-sm text-slate-300">
+            Système
+            <select
+              value={linkRequest.osFamily}
+              onChange={(event) => {
+                const { value } = event.currentTarget;
+                setLinkRequest((current) => ({ ...current, osFamily: value }));
+              }}
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+            >
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option>
+              <option value="linux">Linux</option>
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm text-slate-300">
+            Version agent
+            <input
+              required
+              value={linkRequest.agentVersion}
+              onChange={(event) => {
+                const { value } = event.currentTarget;
+                setLinkRequest((current) => ({ ...current, agentVersion: value }));
+              }}
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100"
+            />
+          </label>
+        </div>
+        {linkState === 'error' ? (
+          <p role="alert" className="mt-4 text-sm text-rose-200">
+            Impossible de créer le code de liaison. Aucun token n’est affiché.
+          </p>
+        ) : null}
+        <button
+          type="submit"
+          disabled={linkState === 'saving'}
+          className="mt-5 rounded-full bg-emerald-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60"
+        >
+          {linkState === 'saving' ? 'Création…' : 'Créer un code de liaison'}
+        </button>
+        {linkResult ? (
+          <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-sm text-slate-400">Code de liaison</p>
+            <p className="mt-1 text-2xl font-semibold tracking-[0.2em] text-emerald-200">{linkResult.linkCode}</p>
+            <p className="mt-3 break-all text-sm text-slate-300">{linkResult.deepLink}</p>
+            <p className="mt-2 text-xs text-slate-500">Expire à {new Date(linkResult.expiresAt).toLocaleString()}</p>
+          </div>
+        ) : null}
+      </form>
       {state === 'loading' ? (
         <p className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300">Chargement des appareils…</p>
       ) : null}

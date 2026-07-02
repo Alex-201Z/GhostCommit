@@ -410,7 +410,7 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
 
     expect(await screen.findByRole('heading', { name: /agent local/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /t.l.charger \/ relancer l.agent/i })).toBeInTheDocument();
-    expect(screen.getByText(/windows dev laptop/i)).toBeInTheDocument();
+    expect(await screen.findByText(/windows dev laptop/i)).toBeInTheDocument();
     expect(screen.getByText(/connect/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /r.voquer cet appareil/i })).toBeInTheDocument();
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/token|secret|hostname|machine/);
@@ -439,6 +439,45 @@ describe('Phase 1B dashboard authentication and onboarding flow', () => {
       headers: { Authorization: 'Bearer short-lived-access-token' },
     });
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/token|secret|hostname|machine/);
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
+  });
+
+  it('creates an agent link request without exposing device tokens or host identifiers', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => authenticatedSession })
+      .mockResolvedValueOnce({ ok: true, json: async () => completedOnboarding })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          linkCode: 'GC-ABCD23',
+          deepLink: 'ghostcommit://agent/link?code=GC-ABCD23',
+          expiresAt: '2026-07-01T12:10:00.000Z',
+        }),
+      });
+    renderAt('/app/settings/agent');
+
+    fireEvent.change(await screen.findByLabelText(/libell/i), { target: { value: 'Laptop dev' } });
+    fireEvent.change(screen.getByLabelText(/syst.me/i), { target: { value: 'windows' } });
+    fireEvent.change(screen.getByLabelText(/version agent/i), { target: { value: '0.1.0' } });
+    fireEvent.click(screen.getByRole('button', { name: /cr.er un code de liaison/i }));
+
+    expect(await screen.findByText('GC-ABCD23')).toBeInTheDocument();
+    expect(screen.getByText(/ghostcommit:\/\/agent\/link/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agent/link-request', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Authorization: 'Bearer short-lived-access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        deviceLabel: 'Laptop dev',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      }),
+    });
+    expect(document.body.textContent?.toLowerCase()).not.toMatch(/agenttoken|tokenhash|hostname|machine/);
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/sessions|activity|reports/i), expect.anything());
   });
 

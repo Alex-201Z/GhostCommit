@@ -589,4 +589,43 @@ No file watching, local scanning, activity session sync, timeline, report genera
 
 ### Gate decision
 
-Pending GitHub Actions PostgreSQL migration/e2e validation. Phase 4 must not start from this state.
+Phase 3F is validated locally and in GitHub Actions PostgreSQL CI run `28554286795` for head SHA `216f466`. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3G dashboard agent link request flow
+
+### Scope
+
+Dashboard control-plane pairing request for the existing Phase 3A backend endpoint:
+
+- `/app/settings/agent` renders a user-initiated link-request form;
+- the form collects only device label, OS family and agent version;
+- submission calls authenticated `POST /api/v1/agent/link-request`;
+- the dashboard displays the temporary link code, deep link and expiry returned by the backend.
+
+No Electron deep-link handling, device confirmation, token issuance in the dashboard, heartbeat activation, local scanning, file watching, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The dashboard never asks for or renders raw hostname, stable machine identifier, local path, file content, code diff, token material, token hash, session payload or report data.
+- The short-lived access token remains in memory and is used only as the Authorization header.
+- The link request does not confirm an installation and does not start any collection-plane endpoint.
+- UI copy avoids displaying forbidden sensitive-data terms as if they were captured values.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="agent link request"` failed before the link-request form existed.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="agent link request|agent settings"` passed with 2/2 targeted tests after adding the form and correcting the asynchronous installation-list assertion.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3G dashboard agent link request flow is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.

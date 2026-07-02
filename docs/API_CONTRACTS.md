@@ -412,3 +412,26 @@ The endpoint does not accept or require a request body.
 - Agent tokens are never returned by heartbeat or list responses.
 - Heartbeat responses never include `tokenHash`, raw hostname, stable machine identifier, local path, file content, code diff, secret, session payload or report data.
 - Revoked tokens cannot heartbeat.
+
+## Phase 3G dashboard agent link request flow
+
+Phase 3G wires the dashboard `/app/settings/agent` page to the existing `POST /agent/link-request` endpoint. This is a user-initiated control-plane flow only; it creates a short-lived pairing code and does not confirm the device, issue an agent token, start heartbeat or collect activity.
+
+### `/app/settings/agent` link request form
+
+Submitted request:
+
+```json
+{
+  "deviceLabel": "Laptop dev",
+  "osFamily": "windows",
+  "agentVersion": "0.1.0"
+}
+```
+
+Client guarantees:
+
+- sends the authenticated request to `POST /agent/link-request` with the in-memory Bearer token;
+- displays only the short-lived link code, deep link and expiry returned by the backend;
+- never asks for or renders token material, token hashes, raw hostnames, stable machine identifiers, local paths, file contents, code diffs, sessions, reports or exports;
+- does not call heartbeat, activity, session, report, export or agent sync endpoints.

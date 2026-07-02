@@ -134,3 +134,10 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - Heartbeat updates only `lastSeenAt` and the public installation status.
 - Listing installations may mark stale connected agents as `OFFLINE`; this is a device connectivity state, not a productivity, presence or performance signal.
 - Revoked or expired agent tokens are rejected before any status update.
+
+## Phase 3G dashboard link request boundary
+
+- The dashboard can create a link request only from an authenticated, user-initiated form on `/app/settings/agent`.
+- The form accepts only a user-facing device label, OS family and agent version.
+- The UI displays the temporary pairing code, deep link and expiry, but never displays an agent token, token hash, hostname, stable machine identifier, local path, file content, code diff, session payload or report data.
+- Creating a link request does not confirm an installation, start heartbeat, scan local projects, watch files, synchronize sessions, generate reports, export or share data.
