@@ -543,3 +543,15 @@ La Phase 3J branche les fondations de liaison dans l'agent Electron :
 - confirmation utilisateur obligatoire avant appel backend ;
 - envoi d'un heartbeat explicite après liaison réussie ;
 - aucun watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.
+
+## Déconnexion agent locale Phase 3K
+
+La Phase 3K ajoute un contrôle local utilisateur dans l'agent Electron :
+
+- action explicite `Effacer la liaison agent locale` dans le menu tray ;
+- suppression du token appareil via le coffre sécurisé ;
+- effacement du token utilisateur legacy encore présent dans `config.json` ;
+- arrêt des watchers et du tracker local actifs ;
+- aucun appel heartbeat, synchronisation de sessions, révocation distante, rapport, export ou partage déclenché.
+
+Cette action est locale. La révocation serveur reste contrôlée depuis le dashboard via l'endpoint propriétaire existant.

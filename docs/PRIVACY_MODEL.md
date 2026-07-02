@@ -165,3 +165,10 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The user must confirm the link before the backend confirmation call.
 - Cancelled or invalid links do not persist credentials, heartbeat, watch folders, scan projects, synchronize sessions, generate reports, export or share data.
 - Successful linking sends one explicit heartbeat as device connectivity only; it is not presence or productivity evidence.
+
+## Phase 3K local disconnect boundary
+
+- The agent exposes a local user control to clear the stored device token.
+- The same action clears the legacy user token and stops active watchers/activity tracking.
+- Disconnecting locally does not call heartbeat, synchronize sessions, revoke a remote installation, generate reports, export or share data.
+- Server-side revocation remains an explicit dashboard/API action owned by the authenticated user.

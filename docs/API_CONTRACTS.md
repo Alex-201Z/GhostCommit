@@ -493,3 +493,16 @@ Guarantees:
 - cancellation does not confirm the agent, persist a token or heartbeat;
 - successful linking does not start file watching, project scanning, activity session sync, report generation, export or sharing;
 - the confirmation UI displays only the pairing code and non-sensitive explanatory copy.
+
+## Phase 3K local agent disconnect
+
+Phase 3K adds no new backend endpoint. It exposes an agent-local control for clearing the local device link.
+
+Agent-local behavior:
+
+- clears the stored device token through the secure credential store;
+- clears the legacy user access token from local config;
+- stops active file watchers and activity tracking;
+- does not call heartbeat, session synchronization, report generation, export, sharing or remote revocation.
+
+Remote revocation remains the existing user-owned dashboard/API flow: `POST /agent/installations/:id/revoke`.

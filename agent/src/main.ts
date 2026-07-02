@@ -12,6 +12,7 @@ import { AgentHeartbeatService } from './services/agentHeartbeat';
 import { AgentLinkingService } from './services/agentLinking';
 import { AgentLinkFlow } from './services/agentLinkFlow';
 import { extractGhostCommitLink, GhostCommitProtocolHandler } from './services/agentProtocol';
+import { AgentConnectionControlService } from './services/agentConnectionControl';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -26,6 +27,7 @@ class GhostCommitAgent {
   private heartbeat: AgentHeartbeatService;
   private linkFlow: AgentLinkFlow;
   private protocolHandler: GhostCommitProtocolHandler;
+  private connectionControl: AgentConnectionControlService;
 
   constructor() {
     this.config = new ConfigManager();
@@ -47,6 +49,12 @@ class GhostCommitAgent {
     this.heartbeat = new AgentHeartbeatService({
       getDeviceToken: () => this.credentials.getDeviceToken(),
       heartbeat: (agentToken) => this.apiClient.sendAgentHeartbeat(agentToken),
+    });
+    this.connectionControl = new AgentConnectionControlService({
+      clearDeviceToken: () => this.credentials.clearDeviceToken(),
+      clearUserToken: () => this.config.setToken(''),
+      stopWatching: () => this.fileWatcher.stopAll(),
+      stopActivityTracking: () => this.activityTracker.stop(),
     });
     this.linkFlow = new AgentLinkFlow({
       confirmLink: (input, options) => linking.confirmLink(input, options),
@@ -135,7 +143,11 @@ class GhostCommitAgent {
       { type: 'separator' },
       {
         label: isAuthenticated ? 'Se déconnecter' : 'Se connecter',
-        click: () => (isAuthenticated ? this.logout() : this.login()),
+        click: () => (isAuthenticated ? void this.logout() : this.login()),
+      },
+      {
+        label: 'Effacer la liaison agent locale',
+        click: () => void this.disconnectLocalAgent(),
       },
       { type: 'separator' },
       {
@@ -293,15 +305,20 @@ class GhostCommitAgent {
     });
   }
 
-  private logout(): void {
-    this.config.setToken('');
+  private async disconnectLocalAgent(): Promise<void> {
+    await this.connectionControl.disconnectLocalAgent();
     this.updateTrayMenu();
 
-    dialog.showMessageBox({
+    await dialog.showMessageBox({
       type: 'info',
-      title: 'Déconnexion',
-      message: 'Vous avez été déconnecté.',
+      title: 'Liaison locale effacée',
+      message:
+        'La liaison locale de l’agent a été effacée et les surveillances actives ont été arrêtées. Aucune collecte n’a été démarrée.',
     });
+  }
+
+  private async logout(): Promise<void> {
+    await this.disconnectLocalAgent();
   }
 
   private quit(): void {

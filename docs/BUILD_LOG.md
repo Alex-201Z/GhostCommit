@@ -907,3 +907,46 @@ Passing CI steps:
 ### CI gate decision
 
 Phase 3J Electron protocol and confirmation flow is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3K local agent disconnect control
+
+### Scope
+
+Agent-local user control for disconnecting the local agent:
+
+- clear the stored device token from the secure credential store;
+- clear the legacy user token from local config;
+- stop active watchers and activity tracking;
+- expose the action from the Electron tray menu.
+
+No backend endpoint, remote revocation, heartbeat scheduler, file scanning, session synchronization, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Disconnect is local and explicit.
+- It removes heartbeat credentials locally without sending token material anywhere.
+- It stops existing local collection loops instead of starting new ones.
+- It does not call heartbeat, sync sessions or remote revocation as hidden side effects.
+- Remote revocation remains the existing dashboard-owned control.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentConnectionControl.test.ts` failed because `agentConnectionControl` did not exist.
+- GREEN: the same targeted command passed after adding `AgentConnectionControlService`.
+- `npm run test --workspace @ghostcommit/agent`: passed with 23/23 tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 23/23, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3K local agent disconnect control is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
