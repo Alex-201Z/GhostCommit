@@ -1222,3 +1222,60 @@ Phase 3O was validated through PR #5:
 ### Gate decision
 
 Phase 3O is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 1A PostgreSQL CI gate revalidation
+
+### Scope
+
+Revalidation only for the Phase 1A authentication/data-foundation gate against the current repository state. No Phase 1B public page, login UI, onboarding UI, app shell, repository connection, agent work or reporting work was started.
+
+### CI contract rechecked
+
+- `.github/workflows/ci.yml` starts PostgreSQL with `postgres:16-alpine`.
+- The CI `DATABASE_URL` targets `postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`.
+- Dependencies install with `npm ci --ignore-scripts`; `npm install` is not used by CI.
+- Prisma Client generation runs before `prisma migrate deploy`.
+- `prisma migrate deploy` runs before `npm run test:e2e --workspace @ghostcommit/backend`.
+- `RUN_DATABASE_TESTS=true` is defined at job level.
+- `backend/test/auth.e2e-spec.ts` throws when `CI=true` without `RUN_DATABASE_TESTS=true`, so PostgreSQL e2e cannot be silently skipped in CI.
+
+### Phase 1A scenario coverage
+
+The first six PostgreSQL scenarios in `backend/test/auth.e2e-spec.ts` still cover the Phase 1A gate:
+
+1. invalid, expired and consumed OAuth state, with no secret/code/state echoing;
+2. user creation/reconnection and one idempotent personal workspace;
+3. refresh token rotation, replay rejection and token-family revocation;
+4. versioned consent, authenticated onboarding status and no collection activation;
+5. user A/B ownership protection through strict DTO validation;
+6. logout revocation, refresh-cookie clearing and safe refresh errors.
+
+Later scenarios in the same e2e file cover Phase 3 project/agent behavior and are additional coverage, not a Phase 1A scope expansion.
+
+### Local verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `CI=true` without `RUN_DATABASE_TESTS=true` plus `npm run test:e2e --workspace @ghostcommit/backend`: failed with the expected hard error preventing silent skips.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 35/35, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+
+Local `prisma migrate deploy` against `localhost:5432` remains unavailable in this Windows shell with a generic Prisma schema-engine error, so real PostgreSQL execution evidence is the GitHub Actions CI run below.
+
+### GitHub Actions evidence
+
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28666456677
+- Event: `pull_request`
+- Branch: `codex/ghostcommit-v1-completion`
+- Head SHA: `59b9376bfef42862b85089ca5b438113246b0d3e`
+- Job: `quality`
+- Result: `SUCCESS`
+
+Passing CI steps included container initialization, `npm ci --ignore-scripts`, Prisma generation, `prisma migrate deploy`, lint, typecheck, unit tests, PostgreSQL integration tests with `RUN_DATABASE_TESTS=true`, and build.
+
+### Gate decision
+
+Phase 1A can be considered validated against real PostgreSQL via GitHub Actions CI in the current repository state. No Phase 1B work was started during this revalidation.
