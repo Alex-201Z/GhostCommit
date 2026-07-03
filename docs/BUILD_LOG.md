@@ -1326,4 +1326,20 @@ No backend endpoint, activity/session synchronization, report generation, export
 
 ### Gate decision
 
-Phase 3P is implemented and locally gate-validated. It is ready for commit/push and GitHub Actions CI validation. Phase 4 must not start from this state.
+Phase 3P is implemented and locally gate-validated. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3P was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28667189752
+- Job: `quality`
+- Head SHA: `68f9ab1`
+- Result: passed in 2m22s.
+- CI evidence: PostgreSQL 16 container initialized, dependencies installed with `npm ci --ignore-scripts`, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3P product blocker but remains a CI maintenance item.
+
+### CI gate decision
+
+Phase 3P authorized project watcher boundary is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
