@@ -16,6 +16,7 @@ import { AgentConnectionControlService } from './services/agentConnectionControl
 import { createPrivacySafeWatchControls } from './services/trayPrivacy';
 import { ProjectSelectionService, type ProjectAuthorizationDraft } from './services/projectSelection';
 import { ProjectAuthorizationFlow } from './services/projectAuthorizationFlow';
+import { LocalProjectAuthorizationStore } from './services/projectAuthorizationStore';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -33,6 +34,7 @@ class GhostCommitAgent {
   private connectionControl: AgentConnectionControlService;
   private projectSelection: ProjectSelectionService;
   private projectAuthorizationFlow: ProjectAuthorizationFlow;
+  private projectAuthorizationStore: LocalProjectAuthorizationStore;
 
   constructor() {
     this.config = new ConfigManager();
@@ -62,9 +64,12 @@ class GhostCommitAgent {
       stopActivityTracking: () => this.activityTracker.stop(),
     });
     this.projectSelection = new ProjectSelectionService();
+    this.projectAuthorizationStore = new LocalProjectAuthorizationStore(app.getPath('userData'));
     this.projectAuthorizationFlow = new ProjectAuthorizationFlow({
       selection: this.projectSelection,
       createProject: (payload, userAccessToken) => this.apiClient.createProject(payload, userAccessToken),
+      saveAuthorizedProject: (mapping) =>
+        this.projectAuthorizationStore.saveAuthorizedProject(mapping),
       requestUserConfirmation: (draft) => this.requestProjectAuthorizationConfirmation(draft),
     });
     this.linkFlow = new AgentLinkFlow({

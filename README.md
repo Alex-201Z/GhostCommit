@@ -575,3 +575,13 @@ La Phase 3M branche l'action tray `Autoriser un projet Git local` sur le flux d'
 - après confirmation, l'agent appelle `POST /api/v1/projects` avec le token utilisateur et le payload safe ;
 - le chemin absolu reste local-only et n'est jamais envoyé au backend ;
 - aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage n'est déclenché.
+
+## Mapping projet local Phase 3N
+
+La Phase 3N conserve localement le lien entre le projet backend autorisé et le dossier Git choisi :
+
+- le mapping est écrit uniquement après retour d'un `projectId` valide par `POST /api/v1/projects` ;
+- le fichier local contient l'id projet, le nom affiché, l'alias safe, le chemin local root, `collectionEnabled: false` et la date d'autorisation ;
+- le chemin absolu reste dans l'agent Electron et n'est pas transmis au backend ;
+- une nouvelle autorisation du même projet met à jour le mapping sans doublon ;
+- cette étape n'active toujours aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage.

@@ -537,3 +537,21 @@ Guarantees:
 - the backend payload never contains the absolute local root path, parent directory, file contents, code diffs, hostname, machine identifier, token material or secrets;
 - creating the project from the agent does not start watchers, project scans, heartbeat scheduling, session synchronization, report generation, export or sharing;
 - the absolute local root remains local-only for later explicit activation phases.
+
+## Phase 3N local authorized-project mapping
+
+Phase 3N adds no backend endpoint. It persists the local-only mapping created after a confirmed agent-side project authorization.
+
+Agent-local behavior:
+
+- after `POST /projects` returns a valid project id, the agent stores `{ projectId, displayName, localAlias, localRootPath, collectionEnabled, authorizedAt }` in its local data directory;
+- mappings are upserted by `projectId` so repeated authorization updates the safe display fields without duplicating the local project;
+- `collectionEnabled` is always `false` in this subphase;
+- missing or invalid backend project ids do not create a local mapping.
+
+Guarantees:
+
+- the mapping file is local-only and is not sent to the backend;
+- the absolute `localRootPath` remains available only inside the Electron agent for a later explicit activation phase;
+- saving the mapping does not start watchers, project scans, heartbeat scheduling, session synchronization, report generation, export or sharing;
+- store read/write error logs use generic labels and must not echo local paths.

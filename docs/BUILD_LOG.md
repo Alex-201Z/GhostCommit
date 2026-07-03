@@ -1106,3 +1106,51 @@ Phase 3M was validated through PR #5:
 ### Gate decision
 
 Phase 3M is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3N local authorized-project mapping
+
+### Scope
+
+Agent-local persistence for confirmed project authorization:
+
+- save a local mapping only after `POST /projects` returns a valid project id;
+- store `projectId`, safe display fields, `localRootPath`, `collectionEnabled: false` and `authorizedAt` in the agent data directory;
+- upsert mappings by `projectId` to avoid duplicates;
+- reject mapping persistence when the backend response has no valid project id;
+- do not start watchers, project scans, heartbeat scheduling, session synchronization, reports, export or sharing.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/projectAuthorizationFlow.ts`
+- `agent/src/services/projectAuthorizationFlow.test.ts`
+- `agent/src/services/projectAuthorizationStore.ts`
+- `agent/src/services/projectAuthorizationStore.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts` failed because `projectAuthorizationStore` did not exist.
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts` failed because the flow did not save mappings and accepted backend responses without project ids.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts`: passed, 1/1.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts`: passed, 4/4.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 31/31.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 31/31, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+GitHub Actions validation is pending for this subphase.
+
+### Gate decision
+
+Phase 3N is implemented and locally gate-validated but is not yet CI-validated. Phase 4 must not start from this state.

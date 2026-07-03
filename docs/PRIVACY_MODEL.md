@@ -188,3 +188,12 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The backend receives only the existing `POST /projects` payload: display name, `LOCAL` provider, safe local alias, optional branch and filtered ignored patterns.
 - Missing authentication, cancellation and invalid folders do not create projects.
 - Authorizing the project still does not start watchers, scan folders, heartbeat scheduling, session synchronization, report generation, export or sharing.
+
+## Phase 3N local authorized-project mapping boundary
+
+- The agent stores a local mapping only after a confirmed backend project creation returns a valid project id.
+- The mapping keeps the absolute local root path local-only and pairs it with the backend project id and safe alias.
+- The stored mapping defaults `collectionEnabled` to `false`; authorization is not collection activation.
+- Re-authorizing the same project id updates the local mapping idempotently instead of duplicating it.
+- Mapping persistence does not call the backend and does not start watchers, folder scans, heartbeat scheduling, session synchronization, report generation, export or sharing.
+- Local store errors are logged with generic labels only, not raw local paths.
