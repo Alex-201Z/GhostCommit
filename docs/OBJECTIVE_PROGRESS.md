@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. Phase 3M agent-local project authorization call is complete and CI-validated. Phase 3N local authorized-project mapping is implemented and locally gate-validated, awaiting CI validation. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. Phase 3M agent-local project authorization call is complete and CI-validated. Phase 3N local authorized-project mapping is complete and CI-validated. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -525,6 +525,7 @@ Phase 3N targeted checks on 2026-07-03:
 - `npm test`: passed with backend 10/10, agent 31/31, dashboard 24/24 and shared no-test pass.
 - `npm run build`: passed.
 - `git diff --check`: passed with CRLF warnings only.
+- GitHub Actions CI run `28665691772` on PR #5: passed with PostgreSQL 16, migration deploy, lint, typecheck, unit tests, PostgreSQL integration tests and build for head SHA `d4863be`.
 
 ## External blockers
 
@@ -533,4 +534,4 @@ Phase 3N targeted checks on 2026-07-03:
 
 ## Next exact task
 
-Run the full repository gate for Phase 3N, commit/push the local authorized-project mapping, validate GitHub Actions CI, then implement the next Phase 3 subphase: add explicit local start/pause controls for authorized projects while keeping session sync, reports, export and sharing disabled.
+Implement the next Phase 3 subphase: add explicit local start/pause controls for authorized projects while keeping session sync, reports, export and sharing disabled.
