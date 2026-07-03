@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { ConfigManager } from '../utils/config';
 import { AgentLinkConfirmation, AgentLinkConfirmPayload } from './agentLinking';
+import { ProjectCreatePayload } from './projectSelection';
 
 export interface ActivitySessionData {
   startTime: string;
@@ -108,6 +109,24 @@ export class ApiClient {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown error';
       console.error('Error sending agent heartbeat:', message);
+      throw error;
+    }
+  }
+
+  async createProject(
+    payload: ProjectCreatePayload,
+    userAccessToken: string,
+  ): Promise<Record<string, unknown>> {
+    try {
+      const response = await this.client.post('/projects', payload, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+        },
+      });
+      return response.data as Record<string, unknown>;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error creating local project authorization:', message);
       throw error;
     }
   }

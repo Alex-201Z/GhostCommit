@@ -564,3 +564,14 @@ La Phase 3L neutralise les anciens contrôles Electron qui pouvaient démarrer u
 - le sous-menu affiche uniquement un résumé par nombre ;
 - l'action legacy `Ajouter un dossier` devient une guidance vers le dashboard ;
 - aucun picker local, watcher, scan, synchronisation de sessions, rapport, export ou partage n'est déclenché.
+
+## Autorisation projet locale Phase 3M
+
+La Phase 3M branche l'action tray `Autoriser un projet Git local` sur le flux d'autorisation local :
+
+- le picker de dossier ne s'ouvre qu'après une action utilisateur explicite ;
+- seul un repository Git local peut produire un brouillon d'autorisation ;
+- la confirmation Electron affiche uniquement nom, alias safe, nombre de patterns ignorés et branche optionnelle ;
+- après confirmation, l'agent appelle `POST /api/v1/projects` avec le token utilisateur et le payload safe ;
+- le chemin absolu reste local-only et n'est jamais envoyé au backend ;
+- aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage n'est déclenché.

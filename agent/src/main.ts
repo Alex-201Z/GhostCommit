@@ -14,6 +14,8 @@ import { AgentLinkFlow } from './services/agentLinkFlow';
 import { extractGhostCommitLink, GhostCommitProtocolHandler } from './services/agentProtocol';
 import { AgentConnectionControlService } from './services/agentConnectionControl';
 import { createPrivacySafeWatchControls } from './services/trayPrivacy';
+import { ProjectSelectionService, type ProjectAuthorizationDraft } from './services/projectSelection';
+import { ProjectAuthorizationFlow } from './services/projectAuthorizationFlow';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -29,6 +31,8 @@ class GhostCommitAgent {
   private linkFlow: AgentLinkFlow;
   private protocolHandler: GhostCommitProtocolHandler;
   private connectionControl: AgentConnectionControlService;
+  private projectSelection: ProjectSelectionService;
+  private projectAuthorizationFlow: ProjectAuthorizationFlow;
 
   constructor() {
     this.config = new ConfigManager();
@@ -56,6 +60,12 @@ class GhostCommitAgent {
       clearUserToken: () => this.config.setToken(''),
       stopWatching: () => this.fileWatcher.stopAll(),
       stopActivityTracking: () => this.activityTracker.stop(),
+    });
+    this.projectSelection = new ProjectSelectionService();
+    this.projectAuthorizationFlow = new ProjectAuthorizationFlow({
+      selection: this.projectSelection,
+      createProject: (payload, userAccessToken) => this.apiClient.createProject(payload, userAccessToken),
+      requestUserConfirmation: (draft) => this.requestProjectAuthorizationConfirmation(draft),
     });
     this.linkFlow = new AgentLinkFlow({
       confirmLink: (input, options) => linking.confirmLink(input, options),
@@ -137,7 +147,7 @@ class GhostCommitAgent {
       },
       {
         label: watchControls.addProjectLabel,
-        click: () => this.showProjectAuthorizationGuidance(),
+        click: () => void this.authorizeLocalGitProject(),
       },
       { type: 'separator' },
       {
@@ -255,6 +265,75 @@ class GhostCommitAgent {
 
   private showSetupDialog(): void {
     this.showProjectAuthorizationGuidance();
+  }
+
+  private async authorizeLocalGitProject(): Promise<void> {
+    const result = await dialog.showOpenDialog({
+      title: 'Choisir un projet Git à autoriser',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return;
+    }
+
+    const authorization = await this.projectAuthorizationFlow.authorizeLocalProject(result.filePaths[0]);
+    if (authorization.status === 'created') {
+      this.updateTrayMenu();
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Projet autorisé',
+        message:
+          'Le projet Git local est autorisé dans GhostCommit. Aucune surveillance ni synchronisation de sessions n’a été démarrée.',
+      });
+      return;
+    }
+
+    if (authorization.status === 'error') {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Autorisation impossible',
+        message: authorization.message,
+      });
+    }
+  }
+
+  private async requestProjectAuthorizationConfirmation(draft: ProjectAuthorizationDraft) {
+    const userAccessToken = this.config.getToken();
+    if (!userAccessToken) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Connexion requise',
+        message: 'Connectez-vous au dashboard avant d’autoriser un projet local.',
+        detail: 'Aucune surveillance ni synchronisation de sessions n’a été démarrée.',
+      });
+      return { confirmed: false };
+    }
+
+    const detail = [
+      `Nom affiché : ${draft.apiPayload.displayName}`,
+      `Alias local : ${draft.apiPayload.localAlias}`,
+      `Patterns ignorés localement : ${draft.apiPayload.ignoredPatterns.length}`,
+      draft.apiPayload.branch ? `Branche détectée : ${draft.apiPayload.branch}` : undefined,
+      'Aucun chemin absolu, contenu de fichier, hostname ou token ne sera envoyé.',
+      'Aucune surveillance ni synchronisation de sessions ne démarrera.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const result = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Autoriser ce projet Git local',
+      message: `Autoriser “${draft.apiPayload.displayName}” dans GhostCommit ?`,
+      detail,
+      buttons: ['Autoriser ce projet', 'Annuler'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    return {
+      confirmed: result.response === 0,
+      userAccessToken,
+    };
   }
 
   private showDashboard(): void {

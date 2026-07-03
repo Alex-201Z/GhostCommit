@@ -9,7 +9,7 @@ export interface PrivacySafeWatchControls {
     items: TrayMenuItemModel[];
   };
   addProjectLabel: string;
-  canAddProjectLocally: false;
+  canAddProjectLocally: boolean;
   requestAddProject: () => void;
 }
 
@@ -36,8 +36,8 @@ export function createPrivacySafeWatchControls(
             ]
           : [{ label: 'Aucun dossier surveillé', enabled: false }],
     },
-    addProjectLabel: 'Ajouter un projet depuis le dashboard',
-    canAddProjectLocally: false,
+    addProjectLabel: 'Autoriser un projet Git local',
+    canAddProjectLocally: true,
     requestAddProject: () => undefined,
   };
 }

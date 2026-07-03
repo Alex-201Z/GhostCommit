@@ -1044,3 +1044,55 @@ Passing CI steps:
 ### CI gate decision
 
 Phase 3L tray privacy hardening is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3M agent-local project authorization call
+
+### Scope
+
+Agent-local wiring for the existing safe project authorization contract:
+
+- expose `Autoriser un projet Git local` from the tray;
+- open the local folder picker only after that explicit user action;
+- require a Git repository before creating a local authorization draft;
+- show a confirmation dialog with safe metadata only;
+- call authenticated `POST /api/v1/projects` only after confirmation;
+- do not start watchers, project scans, heartbeat scheduling, session synchronization, reports, export or sharing.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/apiClient.ts`
+- `agent/src/services/apiClient.test.ts`
+- `agent/src/services/projectAuthorizationFlow.ts`
+- `agent/src/services/projectAuthorizationFlow.test.ts`
+- `agent/src/services/trayPrivacy.ts`
+- `agent/src/services/trayPrivacy.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts` failed because `projectAuthorizationFlow` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts`: passed, 3/3.
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because the tray still pointed add-project guidance to the dashboard and disabled local authorization.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- apiClient.test.ts`: passed, 1/1.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 29/29.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 29/29, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+GitHub Actions validation is pending for this subphase.
+
+### Gate decision
+
+Phase 3M is implemented and locally gate-validated but is not yet CI-validated. Phase 4 must not start from this state.

@@ -179,3 +179,12 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The tray shows only a count-based local summary while collection remains inactive.
 - The legacy add-folder path picker is disabled and replaced with guidance to the explicit dashboard/project authorization flow.
 - This hardening does not start watchers, scan folders, synchronize sessions, heartbeat, generate reports, export or share data.
+
+## Phase 3M local project authorization call boundary
+
+- The tray exposes a user-initiated `Autoriser un projet Git local` action.
+- The folder picker opens only after that explicit action and accepts only Git repository folders.
+- The local authorization draft keeps the absolute root path inside the agent process; the confirmation dialog shows only safe metadata.
+- The backend receives only the existing `POST /projects` payload: display name, `LOCAL` provider, safe local alias, optional branch and filtered ignored patterns.
+- Missing authentication, cancellation and invalid folders do not create projects.
+- Authorizing the project still does not start watchers, scan folders, heartbeat scheduling, session synchronization, report generation, export or sharing.

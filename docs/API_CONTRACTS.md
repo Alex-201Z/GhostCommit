@@ -518,3 +518,22 @@ Agent-local behavior:
 - local folder opening from the tray is disabled;
 - the legacy add-folder control shows dashboard authorization guidance instead of opening a folder picker;
 - no watcher, project scan, heartbeat, session synchronization, report generation, export or sharing is started.
+
+## Phase 3M agent-local project authorization call
+
+Phase 3M adds no backend endpoint. It wires the Electron tray action to the existing local authorization draft and authenticated `POST /projects` contract.
+
+Agent-local behavior:
+
+- the user must click `Autoriser un projet Git local`;
+- Electron opens a folder picker only from that explicit action;
+- the selected folder must be a Git repository before an authorization draft can be prepared;
+- the confirmation dialog displays only safe metadata: display name, local alias, ignored-pattern count and optional branch;
+- after the user confirms, the agent calls `POST /projects` with the user access token and the safe project payload only;
+- cancellation, missing authentication or invalid folders do not call the backend.
+
+Guarantees:
+
+- the backend payload never contains the absolute local root path, parent directory, file contents, code diffs, hostname, machine identifier, token material or secrets;
+- creating the project from the agent does not start watchers, project scans, heartbeat scheduling, session synchronization, report generation, export or sharing;
+- the absolute local root remains local-only for later explicit activation phases.

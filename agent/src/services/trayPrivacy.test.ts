@@ -20,11 +20,12 @@ describe('tray privacy controls', () => {
     expect(openFolder).not.toHaveBeenCalled();
   });
 
-  it('keeps add-project guidance disabled locally until the explicit authorization flow owns it', () => {
+  it('offers the explicit local Git authorization action without exposing local paths', () => {
     const controls = createPrivacySafeWatchControls([], { openFolder: vi.fn() });
 
-    expect(controls.addProjectLabel).toBe('Ajouter un projet depuis le dashboard');
-    expect(controls.canAddProjectLocally).toBe(false);
+    expect(controls.addProjectLabel).toBe('Autoriser un projet Git local');
+    expect(controls.canAddProjectLocally).toBe(true);
     expect(controls.watchSummary.items).toEqual([{ label: 'Aucun dossier surveillé', enabled: false }]);
+    expect(JSON.stringify(controls)).not.toMatch(/C:\\|Users|home/);
   });
 });

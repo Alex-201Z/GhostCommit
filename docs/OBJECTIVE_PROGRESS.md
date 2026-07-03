@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. Phase 3M agent-local project authorization call is implemented and locally gate-validated, awaiting CI validation. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -102,6 +102,12 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - a user confirmation prompt is required before backend confirmation;
   - cancellation and invalid links do not persist credentials or heartbeat;
   - successful linking sends one explicit heartbeat and still does not start watchers, scans, sync, reporting, export or sharing.
+- Phase 3M agent-local project authorization call:
+  - the tray action `Autoriser un projet Git local` opens a folder picker only after explicit user action;
+  - the agent prepares the existing local Git authorization draft and shows a safe confirmation dialog;
+  - confirmed projects call `POST /projects` with only display name, `LOCAL` provider, safe alias, optional branch and filtered ignored patterns;
+  - cancelled, unauthenticated or invalid-folder flows do not call the backend;
+  - no watcher, project scan, heartbeat scheduling, session sync, report generation, export or sharing is started.
 
 ## Current technical decisions
 
@@ -121,6 +127,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3H keeps user-session handoff injectable because the existing backend confirm endpoint is JWT-guarded; the agent does not persist that user token in this foundation.
 - Phase 3I treats heartbeat as a user/device control-plane signal only; it must not be used as presence, productivity or performance evidence.
 - Phase 3J keeps the Electron prompt minimal and non-sensitive; a richer rendered confirmation UI can replace the dialog later without changing the service boundary.
+- Phase 3M keeps the absolute local project path in the Electron process only. The backend receives only the existing safe `POST /projects` payload after confirmation.
 
 ## Important files modified in the current Phase 3B subphase
 
@@ -231,6 +238,21 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `docs/OBJECTIVE_PROGRESS.md`
 - `README.md`
 
+## Important files modified in the current Phase 3M subphase
+
+- `agent/src/main.ts`
+- `agent/src/services/apiClient.ts`
+- `agent/src/services/apiClient.test.ts`
+- `agent/src/services/projectAuthorizationFlow.ts`
+- `agent/src/services/projectAuthorizationFlow.test.ts`
+- `agent/src/services/trayPrivacy.ts`
+- `agent/src/services/trayPrivacy.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/BUILD_LOG.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
 ## Migrations
 
 - `20260701_phase_3a_projects_agent_foundations`: adds agent link/install tables, agent/project status enums, local project provider, and project privacy fields.
@@ -251,6 +273,8 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3G does not yet implement the Electron-side deep link handler or confirmation screen; that remains inside Phase 3 before real local pairing is usable.
 - Phase 3I does not yet implement the rendered Electron confirmation UI, protocol registration, or automatic heartbeat scheduling after confirmation.
 - Phase 3J uses Electron dialogs for confirmation rather than a custom rendered window; this is acceptable for the current linking gate but can be replaced in a later polish subphase.
+- Phase 3M still depends on the legacy user access token available to the Electron agent for authenticated `POST /projects`; a later auth/session hardening subphase should replace the manual token path before distribution.
+- Phase 3M authorizes the project remotely but does not persist a local project-id-to-root mapping or start collection. That mapping must be added before any Phase 4 session sync can be safely enabled.
 
 ## Tests executed
 
@@ -446,6 +470,24 @@ Phase 3L targeted checks on 2026-07-02:
 - `git diff --check`: passed with CRLF warnings only.
 - GitHub Actions CI run `28613043523` on PR #5: passed with PostgreSQL 16, `npm ci --ignore-scripts`, migration deploy, lint, typecheck, unit tests, PostgreSQL e2e and build for head SHA `50af77d`.
 
+Phase 3M targeted checks on 2026-07-03:
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts` failed because `projectAuthorizationFlow` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts`: passed, 3/3.
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because the tray still pointed add-project guidance to the dashboard and disabled local authorization.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- apiClient.test.ts`: passed, 1/1.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 29/29.
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 29/29, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -453,4 +495,4 @@ Phase 3L targeted checks on 2026-07-02:
 
 ## Next exact task
 
-Implement the next Phase 3 agent-local authorization subphase: connect the local Git project authorization draft to a safe backend project creation call only after explicit user confirmation, without starting watchers, session sync, reports, export or sharing.
+Run the full repository gate for Phase 3M, commit/push the agent-local project authorization call, validate GitHub Actions CI, then start the next Phase 3 subphase: persist an explicit local project authorization mapping for created projects without starting watchers, session sync, reports, export or sharing.
