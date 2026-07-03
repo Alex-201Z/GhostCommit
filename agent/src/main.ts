@@ -125,7 +125,9 @@ class GhostCommitAgent {
     const watchedPaths = this.fileWatcher.getWatchedPaths();
     const watchControls = createPrivacySafeWatchControls(watchedPaths, {
       openFolder: (localPath) => shell.showItemInFolder(localPath),
-    });
+      startProject: (projectId) => this.setLocalProjectCollection(projectId, true),
+      pauseProject: (projectId) => this.setLocalProjectCollection(projectId, false),
+    }, this.projectAuthorizationStore.listAuthorizedProjects());
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -149,6 +151,10 @@ class GhostCommitAgent {
       {
         label: watchControls.watchSummary.label,
         submenu: watchControls.watchSummary.items,
+      },
+      {
+        label: watchControls.projectControls.label,
+        submenu: watchControls.projectControls.items,
       },
       {
         label: watchControls.addProjectLabel,
@@ -339,6 +345,23 @@ class GhostCommitAgent {
       confirmed: result.response === 0,
       userAccessToken,
     };
+  }
+
+  private setLocalProjectCollection(projectId: string, collectionEnabled: boolean): void {
+    const result = this.projectAuthorizationStore.setProjectCollectionEnabled(
+      projectId,
+      collectionEnabled,
+    );
+    if (result.status === 'not_found') {
+      void dialog.showMessageBox({
+        type: 'warning',
+        title: 'Projet introuvable',
+        message: 'Ce projet autorisé n’existe plus dans le cache local.',
+      });
+      return;
+    }
+
+    this.updateTrayMenu();
   }
 
   private showDashboard(): void {

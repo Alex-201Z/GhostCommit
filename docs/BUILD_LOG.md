@@ -1164,3 +1164,51 @@ Phase 3N was validated through PR #5:
 ### Gate decision
 
 Phase 3N is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3O local project start/pause controls
+
+### Scope
+
+Agent-local tray controls for authorized projects:
+
+- render authorized projects by safe display name only;
+- expose `Démarrer le suivi local` for paused mappings and `Mettre en pause le suivi local` for active mappings;
+- toggle only the local `collectionEnabled` flag by `projectId`;
+- show a generic warning when the local mapping no longer exists;
+- do not call backend endpoints, start watchers, scan projects, schedule heartbeat, synchronize sessions, generate reports, export or share data.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/projectAuthorizationStore.ts`
+- `agent/src/services/projectAuthorizationStore.test.ts`
+- `agent/src/services/trayPrivacy.ts`
+- `agent/src/services/trayPrivacy.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts` failed because `setProjectCollectionEnabled` did not exist.
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because tray project controls did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts`: passed, 2/2.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts`: passed, 3/3.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 33/33.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 33/33, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+GitHub Actions validation is pending for this subphase.
+
+### Gate decision
+
+Phase 3O is implemented and locally gate-validated but is not yet CI-validated. Phase 4 must not start from this state.

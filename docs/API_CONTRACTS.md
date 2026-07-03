@@ -555,3 +555,21 @@ Guarantees:
 - the absolute `localRootPath` remains available only inside the Electron agent for a later explicit activation phase;
 - saving the mapping does not start watchers, project scans, heartbeat scheduling, session synchronization, report generation, export or sharing;
 - store read/write error logs use generic labels and must not echo local paths.
+
+## Phase 3O local project start/pause controls
+
+Phase 3O adds no backend endpoint. It exposes local tray controls for authorized projects.
+
+Agent-local behavior:
+
+- the tray shows authorized projects by display name only, never by absolute path;
+- projects with `collectionEnabled: false` expose `Démarrer le suivi local`;
+- projects with `collectionEnabled: true` expose `Mettre en pause le suivi local`;
+- both controls update only the local authorized-project mapping by `projectId`;
+- missing mappings show a generic local warning.
+
+Guarantees:
+
+- start/pause controls do not call the backend;
+- this subphase does not call `fileWatcher.watchPath`, start project scans, start session synchronization, schedule heartbeat, generate reports, export or share data;
+- local paths remain inside the store and are not rendered in tray labels.

@@ -197,3 +197,11 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - Re-authorizing the same project id updates the local mapping idempotently instead of duplicating it.
 - Mapping persistence does not call the backend and does not start watchers, folder scans, heartbeat scheduling, session synchronization, report generation, export or sharing.
 - Local store errors are logged with generic labels only, not raw local paths.
+
+## Phase 3O local project start/pause boundary
+
+- The tray can toggle an authorized project between local ready/paused and local active states by project id.
+- The tray labels use only safe display names and never render absolute local paths.
+- The toggle updates only the local mapping's `collectionEnabled` flag.
+- In this subphase, `collectionEnabled: true` is a local control-plane state only; it does not start file watchers, folder scans, session creation, synchronization, heartbeat scheduling, reports, export or sharing.
+- Missing local mappings produce a generic warning without path disclosure.

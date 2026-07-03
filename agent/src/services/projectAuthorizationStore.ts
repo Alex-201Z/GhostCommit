@@ -6,7 +6,7 @@ export interface AuthorizedProjectMapping {
   displayName: string;
   localAlias: string;
   localRootPath: string;
-  collectionEnabled: false;
+  collectionEnabled: boolean;
   authorizedAt: string;
 }
 
@@ -16,6 +16,10 @@ export interface SaveAuthorizedProjectInput {
   localAlias: string;
   localRootPath: string;
 }
+
+export type ProjectCollectionToggleResult =
+  | { status: 'updated'; project: AuthorizedProjectMapping }
+  | { status: 'not_found' };
 
 export class LocalProjectAuthorizationStore {
   private readonly storagePath: string;
@@ -60,6 +64,26 @@ export class LocalProjectAuthorizationStore {
     }
 
     return [];
+  }
+
+  setProjectCollectionEnabled(
+    projectId: string,
+    collectionEnabled: boolean,
+  ): ProjectCollectionToggleResult {
+    const mappings = this.listAuthorizedProjects();
+    const existingIndex = mappings.findIndex((mapping) => mapping.projectId === projectId);
+    if (existingIndex < 0) {
+      return { status: 'not_found' };
+    }
+
+    const project = {
+      ...mappings[existingIndex],
+      collectionEnabled,
+    };
+    mappings[existingIndex] = project;
+    this.writeAuthorizedProjects(mappings);
+
+    return { status: 'updated', project };
   }
 
   private ensureStorageDirectory(): void {

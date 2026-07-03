@@ -585,3 +585,12 @@ La Phase 3N conserve localement le lien entre le projet backend autorisé et le 
 - le chemin absolu reste dans l'agent Electron et n'est pas transmis au backend ;
 - une nouvelle autorisation du même projet met à jour le mapping sans doublon ;
 - cette étape n'active toujours aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage.
+
+## Contrôles locaux projet Phase 3O
+
+La Phase 3O ajoute des contrôles locaux dans le tray pour les projets autorisés :
+
+- le tray affiche les projets par nom affiché uniquement, jamais par chemin absolu ;
+- `Démarrer le suivi local` et `Mettre en pause le suivi local` modifient seulement le flag local `collectionEnabled` ;
+- un projet manquant affiche une alerte locale générique ;
+- cette étape ne démarre pas encore `fileWatcher`, scan local, synchronisation de sessions, heartbeat automatique, rapport, export ou partage.
