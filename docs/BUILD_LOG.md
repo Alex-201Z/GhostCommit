@@ -1091,8 +1091,18 @@ Agent-local wiring for the existing safe project authorization contract:
 - `npm run build`: passed.
 - `git diff --check`: passed with CRLF warnings only.
 
-GitHub Actions validation is pending for this subphase.
+### GitHub Actions validation
+
+Phase 3M was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28664990328
+- Job: `quality`
+- Head SHA: `111dd95`
+- Result: passed in 2m20s.
+- CI evidence: PostgreSQL 16 container initialized, dependencies installed with CI workflow, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3M product blocker but should be tracked for CI maintenance.
 
 ### Gate decision
 
-Phase 3M is implemented and locally gate-validated but is not yet CI-validated. Phase 4 must not start from this state.
+Phase 3M is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
