@@ -1279,3 +1279,51 @@ Passing CI steps included container initialization, `npm ci --ignore-scripts`, P
 ### Gate decision
 
 Phase 1A can be considered validated against real PostgreSQL via GitHub Actions CI in the current repository state. No Phase 1B work was started during this revalidation.
+
+## 2026-07-03 — Phase 3P authorized project watcher boundary
+
+### Scope
+
+Agent-local watcher hardening only:
+
+- add a watcher entry point for already-authorized local project mappings;
+- require `collectionEnabled: true` before watching;
+- watch only the local root stored in the mapping;
+- emit a separate safe `authorizedChanges` event containing project id, local alias, filtered relative path, event type and timestamp.
+
+No backend endpoint, activity/session synchronization, report generation, export, sharing, heartbeat scheduling or Phase 4 work was started.
+
+### Privacy decisions
+
+- Authorized watcher events never include absolute paths, parent directories, file contents, code diffs, raw hostnames, machine identifiers, tokens or secrets.
+- Sensitive paths are filtered locally before any authorized watcher event is emitted, including `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.env*`, key/certificate files, `secrets` and `private`.
+- Files outside the authorized project root are ignored.
+- The safe watcher boundary is intentionally not wired into legacy `ActivityTracker`, because the legacy session payload can still construct unsafe sync data until the owning session rewrite lands.
+- Existing legacy watcher methods remain only for compatibility with current tests and disconnect behavior; future session work must use the safe authorized watcher boundary.
+
+### Files changed
+
+- `agent/src/services/fileWatcher.ts`
+- `agent/src/services/fileWatcher.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts` failed because `watchAuthorizedProject` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed after cross-platform Windows/POSIX path normalization hardening, 2/2.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 35/35, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3P is implemented and locally gate-validated. It is ready for commit/push and GitHub Actions CI validation. Phase 4 must not start from this state.

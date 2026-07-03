@@ -594,3 +594,14 @@ La Phase 3O ajoute des contrôles locaux dans le tray pour les projets autorisé
 - `Démarrer le suivi local` et `Mettre en pause le suivi local` modifient seulement le flag local `collectionEnabled` ;
 - un projet manquant affiche une alerte locale générique ;
 - cette étape ne démarre pas encore `fileWatcher`, scan local, synchronisation de sessions, heartbeat automatique, rapport, export ou partage.
+
+## Watcher projet autorisé Phase 3P
+
+La Phase 3P durcit le watcher local sans l'activer dans la synchronisation de sessions :
+
+- `watchAuthorizedProject` refuse les mappings dont `collectionEnabled` n'est pas `true` ;
+- le watcher observe uniquement le root local du projet autorisé ;
+- les événements `authorizedChanges` contiennent seulement `projectId`, `localAlias`, chemin relatif POSIX filtré, type d'événement et horodatage ;
+- les fichiers hors projet et les chemins sensibles (`.git`, `node_modules`, `.env*`, clés/certificats, `secrets`, `private`, etc.) sont ignorés localement ;
+- aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est émis ;
+- cette capacité n'est pas encore connectée à `ActivityTracker` ni au backend : aucune session, rapport, export ou partage n'est produit par cette étape.

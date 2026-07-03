@@ -25,7 +25,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 | Phase 1B-B - Privacy-first onboarding UI | Complete | Five-step onboarding, consent confirmations, status API integration and app consent guard implemented, verified locally and committed. |
 | Phase 1B-C - App shell | Complete | Responsive shell, navigation, workspace header, profile/notifications, permanent agent status and useful empty routes implemented, verified locally and committed. |
 | Phase 2 - Today dashboard | Complete | Read-only privacy-safe `/dashboard/today` contract and `/app` Today dashboard implemented, verified locally and committed. |
-| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. Phase 3M agent-local project authorization call is complete and CI-validated. Phase 3N local authorized-project mapping is complete and CI-validated. Phase 3O local project start/pause controls are complete and CI-validated. |
+| Phase 3 - Projects and agent linking | In progress | Phase 3A backend foundations are validated in GitHub Actions PostgreSQL 16. Phase 3B dashboard project/agent screens are complete. Phase 3C local agent/project selection foundations are validated locally and in GitHub Actions PostgreSQL CI. Phase 3D dashboard project authorization flow is complete locally. Phase 3E dashboard project/agent controls are complete locally. Phase 3F agent heartbeat/offline backend is implemented and CI-validated. Phase 3G dashboard agent link request flow is complete and CI-validated. Phase 3H agent link confirmation foundations are complete and CI-validated. Phase 3I secure token storage and explicit heartbeat is complete and CI-validated. Phase 3J Electron protocol and confirmation flow is complete and CI-validated. Phase 3K local agent disconnect control is complete and CI-validated. Phase 3L tray privacy hardening is complete and CI-validated. Phase 3M agent-local project authorization call is complete and CI-validated. Phase 3N local authorized-project mapping is complete and CI-validated. Phase 3O local project start/pause controls are complete and CI-validated. Phase 3P authorized watcher boundary is implemented locally and awaiting final CI validation. |
 | Phase 4 - Sessions and timeline | Not started | |
 | Phase 5 - Daily draft and explain work | Not started | |
 | Phase 6 - Work items and evidence | Not started | |
@@ -119,6 +119,12 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
   - `Démarrer le suivi local` and `Mettre en pause le suivi local` toggle only the local `collectionEnabled` flag by `projectId`;
   - missing local mappings show a generic warning;
   - no backend call, watcher, project scan, heartbeat scheduling, session sync, report generation, export or sharing is started.
+- Phase 3P authorized watcher boundary:
+  - `watchAuthorizedProject` refuses mappings where `collectionEnabled` is not true;
+  - the watcher is scoped to the local root of the authorized mapping only;
+  - `authorizedChanges` emits only `projectId`, safe `localAlias`, filtered relative POSIX path, event type and timestamp;
+  - files outside the project root and sensitive paths are dropped locally;
+  - no backend session sync, report generation, export or sharing is started.
 
 ## Current technical decisions
 
@@ -141,6 +147,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3M keeps the absolute local project path in the Electron process only. The backend receives only the existing safe `POST /projects` payload after confirmation.
 - Phase 3N treats local project authorization as a control-plane mapping only. `collectionEnabled` remains false until a later explicit activation subphase owns watcher startup and safe session payload filtering.
 - Phase 3O still treats `collectionEnabled: true` as a local control-plane flag only. Actual file watching and privacy-safe session creation remain deferred until the owning session subphase.
+- Phase 3P introduces a safe authorized watcher event channel but keeps it disconnected from legacy `ActivityTracker` until Phase 4 replaces unsafe session payload construction.
 
 ## Important files modified in the current Phase 3B subphase
 
@@ -292,6 +299,16 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - `docs/OBJECTIVE_PROGRESS.md`
 - `README.md`
 
+## Important files modified in the current Phase 3P subphase
+
+- `agent/src/services/fileWatcher.ts`
+- `agent/src/services/fileWatcher.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/BUILD_LOG.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
 ## Migrations
 
 - `20260701_phase_3a_projects_agent_foundations`: adds agent link/install tables, agent/project status enums, local project provider, and project privacy fields.
@@ -315,6 +332,7 @@ Privacy-first invariants remain non-negotiable: no keylogging, screenshots, brow
 - Phase 3M still depends on the legacy user access token available to the Electron agent for authenticated `POST /projects`; a later auth/session hardening subphase should replace the manual token path before distribution.
 - Phase 3N persists the local project-id-to-root mapping but intentionally keeps `collectionEnabled` false. A future subphase must add explicit start/pause controls before any watcher or session sync can be enabled.
 - Phase 3O exposes start/pause as a local flag only; future session work must still replace the unsafe legacy `ActivityTracker` payload before watchers can produce persisted or synced sessions.
+- The legacy `ActivityTracker` can still emit unsafe session payloads if wired directly to the old `changes` event; Phase 3P's `authorizedChanges` must remain the only watcher boundary used by future session work.
 
 ## Tests executed
 
@@ -565,6 +583,19 @@ Phase 3O targeted checks on 2026-07-03:
 - `git diff --check`: passed with CRLF warnings only.
 - GitHub Actions CI run `28666279298` on PR #5: passed with PostgreSQL 16, migration deploy, lint, typecheck, unit tests, PostgreSQL integration tests and build for head SHA `a8ad8fb`.
 
+Phase 3P targeted checks on 2026-07-03:
+
+- RED: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts` failed because `watchAuthorizedProject` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed after cross-platform path normalization hardening, 2/2.
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 35/35, dashboard 24/24, shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
 ## External blockers
 
 - Real OAuth provider credentials are external.
@@ -572,4 +603,4 @@ Phase 3O targeted checks on 2026-07-03:
 
 ## Next exact task
 
-Implement the next Phase 3 subphase: harden the local file watcher so it can only observe `collectionEnabled` authorized projects and emits project-relative filtered paths, without backend session sync, reports, export or sharing.
+Complete the Phase 3P full verification gate, commit/push the authorized watcher boundary, validate GitHub Actions CI, then continue with the next Phase 3 session-preparation subphase without starting Phase 4 until the unsafe legacy session path is replaced.

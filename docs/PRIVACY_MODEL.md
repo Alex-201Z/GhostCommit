@@ -205,3 +205,12 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - The toggle updates only the local mapping's `collectionEnabled` flag.
 - In this subphase, `collectionEnabled: true` is a local control-plane state only; it does not start file watchers, folder scans, session creation, synchronization, heartbeat scheduling, reports, export or sharing.
 - Missing local mappings produce a generic warning without path disclosure.
+
+## Phase 3P authorized watcher boundary
+
+- The hardened watcher can only be requested for locally authorized projects whose `collectionEnabled` flag is true.
+- It watches only the project root stored in the local-only mapping.
+- It emits a separate `authorizedChanges` event with project id, local alias, relative filtered path, event type and timestamp.
+- It drops files outside the project root and locally filters sensitive directories/files before any event leaves the watcher boundary.
+- It never emits absolute paths, file contents, code diffs, hostnames, machine identifiers, tokens or secrets.
+- It remains disconnected from legacy `ActivityTracker` session sync until Phase 4 replaces unsafe session payloads.

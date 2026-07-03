@@ -573,3 +573,21 @@ Guarantees:
 - start/pause controls do not call the backend;
 - this subphase does not call `fileWatcher.watchPath`, start project scans, start session synchronization, schedule heartbeat, generate reports, export or share data;
 - local paths remain inside the store and are not rendered in tray labels.
+
+## Phase 3P authorized project watcher boundary
+
+Phase 3P adds no backend endpoint. It adds a hardened watcher capability for already-authorized local projects.
+
+Agent-local behavior:
+
+- `watchAuthorizedProject(project)` refuses mappings where `collectionEnabled` is not true;
+- the watcher is created only for the mapping's local root path;
+- emitted `authorizedChanges` contain only `projectId`, safe `localAlias`, relative POSIX path, event type and timestamp;
+- files outside the project root are ignored;
+- sensitive paths and files are ignored locally, including `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.env*`, key/certificate files, `secrets` and `private`.
+
+Guarantees:
+
+- authorized watcher events never include absolute paths, parent directories, file contents, code diffs, hostnames, machine identifiers, tokens or secrets;
+- this subphase does not persist sessions, call activity/session APIs, schedule heartbeat, generate reports, export or share data;
+- the safe watcher is not yet wired into `ActivityTracker` because legacy session payloads still require the owning Phase 4 rewrite before sync is allowed.
