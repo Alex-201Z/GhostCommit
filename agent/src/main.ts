@@ -17,6 +17,7 @@ import { createPrivacySafeWatchControls } from './services/trayPrivacy';
 import { ProjectSelectionService, type ProjectAuthorizationDraft } from './services/projectSelection';
 import { ProjectAuthorizationFlow } from './services/projectAuthorizationFlow';
 import { LocalProjectAuthorizationStore } from './services/projectAuthorizationStore';
+import { ProjectCollectionControlService } from './services/projectCollectionControl';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -35,6 +36,7 @@ class GhostCommitAgent {
   private projectSelection: ProjectSelectionService;
   private projectAuthorizationFlow: ProjectAuthorizationFlow;
   private projectAuthorizationStore: LocalProjectAuthorizationStore;
+  private projectCollectionControl: ProjectCollectionControlService;
 
   constructor() {
     this.config = new ConfigManager();
@@ -65,6 +67,12 @@ class GhostCommitAgent {
     });
     this.projectSelection = new ProjectSelectionService();
     this.projectAuthorizationStore = new LocalProjectAuthorizationStore(app.getPath('userData'));
+    this.projectCollectionControl = new ProjectCollectionControlService({
+      setProjectCollectionEnabled: (projectId, collectionEnabled) =>
+        this.projectAuthorizationStore.setProjectCollectionEnabled(projectId, collectionEnabled),
+      watchAuthorizedProject: (project) => this.fileWatcher.watchAuthorizedProject(project),
+      unwatchPath: (localRootPath) => this.fileWatcher.unwatchPath(localRootPath),
+    });
     this.projectAuthorizationFlow = new ProjectAuthorizationFlow({
       selection: this.projectSelection,
       createProject: (payload, userAccessToken) => this.apiClient.createProject(payload, userAccessToken),
@@ -348,15 +356,24 @@ class GhostCommitAgent {
   }
 
   private setLocalProjectCollection(projectId: string, collectionEnabled: boolean): void {
-    const result = this.projectAuthorizationStore.setProjectCollectionEnabled(
-      projectId,
-      collectionEnabled,
-    );
+    const result = collectionEnabled
+      ? this.projectCollectionControl.startProject(projectId)
+      : this.projectCollectionControl.pauseProject(projectId);
     if (result.status === 'not_found') {
       void dialog.showMessageBox({
         type: 'warning',
         title: 'Projet introuvable',
         message: 'Ce projet autorisé n’existe plus dans le cache local.',
+      });
+      return;
+    }
+
+    if (result.status === 'not_started') {
+      void dialog.showMessageBox({
+        type: 'warning',
+        title: 'Suivi local indisponible',
+        message:
+          'Le suivi local nâ€™a pas pu dÃ©marrer pour ce projet autorisÃ©. Aucune session ni synchronisation nâ€™a Ã©tÃ© crÃ©Ã©e.',
       });
       return;
     }

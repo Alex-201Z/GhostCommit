@@ -605,3 +605,13 @@ La Phase 3P durcit le watcher local sans l'activer dans la synchronisation de se
 - les fichiers hors projet et les chemins sensibles (`.git`, `node_modules`, `.env*`, clés/certificats, `secrets`, `private`, etc.) sont ignorés localement ;
 - aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est émis ;
 - cette capacité n'est pas encore connectée à `ActivityTracker` ni au backend : aucune session, rapport, export ou partage n'est produit par cette étape.
+
+## Contrôles watcher explicites Phase 3Q
+
+La Phase 3Q rend les contrôles locaux effectifs sans élargir la collecte :
+
+- `Démarrer le suivi local` active le mapping puis démarre uniquement le watcher autorisé du projet ;
+- `Mettre en pause le suivi local` désactive le mapping et arrête uniquement ce watcher ;
+- un mapping absent n'ouvre ni ne ferme de watcher ;
+- si le watcher refuse le démarrage, le projet revient immédiatement à l'état local en pause ;
+- aucune session n'est créée, stockée ou synchronisée, et aucun heartbeat, rapport, export ou partage n'est déclenché.

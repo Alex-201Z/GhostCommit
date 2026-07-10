@@ -591,3 +591,20 @@ Guarantees:
 - authorized watcher events never include absolute paths, parent directories, file contents, code diffs, hostnames, machine identifiers, tokens or secrets;
 - this subphase does not persist sessions, call activity/session APIs, schedule heartbeat, generate reports, export or share data;
 - the safe watcher is not yet wired into `ActivityTracker` because legacy session payloads still require the owning Phase 4 rewrite before sync is allowed.
+
+## Phase 3Q explicit authorized watcher controls
+
+Phase 3Q adds no backend endpoint. It connects the existing agent-local start/pause controls to the Phase 3P safe watcher boundary.
+
+Agent-local behavior:
+
+- starting a mapped project first sets `collectionEnabled` to `true`, then calls only `watchAuthorizedProject(project)`;
+- pausing a mapped project sets `collectionEnabled` to `false` and closes only that mapping's local watcher root;
+- a missing mapping starts or stops nothing;
+- if the safe watcher refuses activation, the local mapping is restored to `collectionEnabled: false`.
+
+Guarantees:
+
+- this coordination does not call `watchPath`, `ActivityTracker`, activity/session APIs, heartbeat, reports, exports or sharing;
+- start/pause remains a local user control and does not transmit a local root path;
+- `authorizedChanges` remains an in-process, filtered event only until its owning session phase defines a safe local session model.

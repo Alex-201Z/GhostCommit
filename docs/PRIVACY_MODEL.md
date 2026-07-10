@@ -214,3 +214,10 @@ The audited MVP does not yet enforce this model. In particular, the agent curren
 - It drops files outside the project root and locally filters sensitive directories/files before any event leaves the watcher boundary.
 - It never emits absolute paths, file contents, code diffs, hostnames, machine identifiers, tokens or secrets.
 - It remains disconnected from legacy `ActivityTracker` session sync until Phase 4 replaces unsafe session payloads.
+
+## Phase 3Q explicit watcher control boundary
+
+- Local start/pause is effective: starting an authorized enabled project opens only its safe watcher; pausing it closes only that watcher.
+- A watcher refusal restores the local project state to paused rather than leaving a misleading active state.
+- The control coordinator has no dependency on legacy `watchPath`, `ActivityTracker`, local session persistence, backend activity/session APIs, heartbeat, reporting, export or sharing.
+- The local root path is used only inside the agent to identify the watcher to close. It is never rendered, logged, persisted in a session, or transmitted.
