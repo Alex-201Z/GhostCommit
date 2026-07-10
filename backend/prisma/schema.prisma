@@ -35,6 +35,8 @@ model User {
   privacyConsents   PrivacyConsent[]
   onboardingStatus  OnboardingStatus?
   personalWorkspace Team?
+  agentInstallations AgentInstallation[]
+  agentLinkRequests  AgentLinkRequest[]
 
   @@index([email])
   @@index([githubId])
@@ -163,14 +165,22 @@ model Repo {
   name     String
   fullName String // e.g., "owner/repo"
   url      String
+  displayName String?
+  localAlias  String?
 
   // Git provider
   provider   GitProvider
   externalId String // GitHub/GitLab repo ID
 
   // Settings
-  isActive Boolean @default(true)
-  branch   String? @default("main")
+  isActive                  Boolean @default(true)
+  branch                    String? @default("main")
+  trackingStatus            ProjectTrackingStatus @default(ACTIVE)
+  ignoredPatterns           Json?
+  includeFilePathsInReports Boolean @default(true)
+  excludedFromReports       Boolean @default(false)
+  archivedAt                DateTime?
+  lastActivityAt            DateTime?
 
   // Foreign keys
   teamId String
@@ -191,8 +201,62 @@ model Repo {
 }
 
 enum GitProvider {
+  LOCAL
   GITHUB
   GITLAB
+}
+
+enum ProjectTrackingStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model AgentLinkRequest {
+  id           String    @id @default(uuid())
+  userId       String
+  codeHash     String    @unique
+  deviceLabel  String?
+  osFamily     String?
+  agentVersion String?
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("agent_link_requests")
+}
+
+model AgentInstallation {
+  id             String      @id @default(uuid())
+  userId         String
+  deviceLabel    String
+  osFamily       String?
+  agentVersion   String?
+  status         AgentStatus @default(PENDING)
+  tokenHash      String?     @unique
+  tokenExpiresAt DateTime?
+  lastSeenAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("agent_installations")
+}
+
+enum AgentStatus {
+  PENDING
+  CONNECTED
+  OFFLINE
+  PAUSED
+  REVOKED
 }
 
 // Activity Session (work session detected by agent)

@@ -48,6 +48,7 @@ Le projet est organisé en monorepo avec trois composants principaux :
 GhostCommit/
 ├── backend/          # API NestJS + PostgreSQL + Prisma
 ├── agent/            # Agent desktop Electron
+├── dashboard/        # Dashboard React + TypeScript + Vite
 ├── shared/           # Types partagés
 ├── docker-compose.yml
 └── package.json
@@ -72,6 +73,27 @@ GhostCommit/
 **Infrastructure:**
 - Docker & Docker Compose
 - Node.js 18+
+
+## Parcours dashboard actuel
+
+### Fondations API Phase 3A
+
+La Phase 3A ajoute les fondations backend pour :
+
+- créer et confirmer une liaison agent locale avec code court (`POST /api/v1/agent/link-request`, `POST /api/v1/agent/link/confirm`) ;
+- lister et révoquer les installations agent de l’utilisateur (`GET /api/v1/agent/installations`, `POST /api/v1/agent/installations/:id/revoke`) ;
+- créer, lister, consulter, suspendre, reprendre et archiver des projets explicitement autorisés (`/api/v1/projects`).
+
+Ces routes restent privacy-first : pas de hostname brut, pas d’identifiant machine stable, pas de chemin absolu, pas de contenu de fichiers et pas de token agent exposé après la confirmation initiale.
+
+La Phase 1B-A fournit les premières routes dashboard utilisables :
+
+- `/` : page publique privacy-first avec promesse produit, bénéfices et exemple statique de rapport.
+- `/login` : connexion GitHub via `POST /api/v1/auth/github/start`.
+- `/auth/callback` : finalisation de session via cookie HttpOnly et `POST /api/v1/auth/refresh`, sans token dans l'URL ni Web Storage.
+- `/onboarding` : parcours privacy-first en cinq étapes, relié à `GET/PATCH /api/v1/onboarding/status`.
+- `/app` et `/app/today` : tableau Aujourd’hui consent-gated, alimenté par `GET /api/v1/dashboard/today`, avec état agent non installé, session actuelle, brouillon du jour, compteurs neutres, dernières sessions, checklist et données de démonstration locales.
+- `/app/projects`, `/app/activity`, `/app/reports`, `/app/settings` : shell protégé avec navigation, workspace courant, profil, notifications, statut permanent `Agent non installé — aucune activité collectée` et états vides utiles.
 
 ## ✨ Fonctionnalités
 
@@ -430,3 +452,166 @@ Pour toute question ou problème :
 ---
 
 **GhostCommit** - Parce que votre travail mérite d'être vu. 👻✨
+## Etat dashboard Phase 3B
+
+La Phase 3B ajoute les ecrans dashboard consent-gated suivants, sans activer la collecte locale :
+
+- `/app/projects` : liste les projets explicitement autorises via `GET /api/v1/projects`, avec alias local safe, statut, recherche et etat vide.
+- `/app/projects/:id` : affiche le detail privacy-first d'un projet, limite aux metadonnees safe et reglages de confidentialite.
+- `/app/settings/agent` : liste les installations agent via `GET /api/v1/agent/installations`, sans token, hostname brut ni identifiant machine stable.
+
+Cette phase ne demarre pas l'agent Electron, la surveillance de fichiers, la synchronisation de sessions, la generation de rapports, l'export ou le partage.
+
+## Fondations agent Phase 3C
+
+La Phase 3C ajoute des fondations locales cote agent pour preparer une selection de projet sans demarrer la collecte :
+
+- un dossier ne peut devenir un brouillon d'autorisation que s'il s'agit d'un repository Git ;
+- le chemin absolu reste local-only et n'est jamais present dans le payload `POST /projects` ;
+- le payload projet contient uniquement nom affiche, provider `LOCAL`, alias safe et patterns ignores filtres ;
+- la creation du payload exige une confirmation explicite ;
+- l'agent ne surveille plus automatiquement les chemins deja configures au demarrage ;
+- `ActivityTracker` ne synchronise plus de sessions en attente des sa construction.
+
+Cette phase ne branche pas encore l'UI Electron de selection, le heartbeat, la synchronisation de sessions, la timeline, les rapports, l'export ou le partage.
+
+## Flux projet Phase 3D
+
+La Phase 3D branche le bouton `Ajouter un projet` de `/app/projects` sur `POST /api/v1/projects` :
+
+- l'utilisateur ouvre volontairement le formulaire ;
+- il renseigne uniquement un nom affiche, un alias local safe, une branche optionnelle et des patterns ignores ;
+- une confirmation explicite est obligatoire avant l'appel API ;
+- aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est demande ou affiche ;
+- la creation du projet n'active pas le watcher Electron, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Contrôles Phase 3E
+
+La Phase 3E branche les contrôles utilisateur déjà exposés par le backend :
+
+- pause, reprise et archivage depuis `/app/projects/:id` ;
+- révocation d'un agent depuis `/app/settings/agent`.
+
+Ces actions mettent à jour les statuts visibles depuis les réponses API. Elles n'envoient aucun chemin local, contenu de fichier, diff, hostname, identifiant machine, token ou secret, et ne démarrent pas le watcher, le heartbeat, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Heartbeat agent Phase 3F
+
+La Phase 3F ajoute `POST /api/v1/agent/heartbeat` avec le token appareil `gca_*` issu de la liaison agent :
+
+- le token reste hash-only en base ;
+- les tokens absents, invalides, expirés ou révoqués sont rejetés ;
+- le heartbeat met à jour uniquement `lastSeenAt` et le statut public de l'installation ;
+- les agents connectés sans heartbeat récent deviennent `OFFLINE` lors du listing ;
+- aucun hostname, identifiant machine, chemin local, contenu de fichier, diff, secret, session ou rapport n'est accepté.
+
+## Liaison agent dashboard Phase 3G
+
+La Phase 3G branche `/app/settings/agent` sur `POST /api/v1/agent/link-request` :
+
+- l'utilisateur crée volontairement une demande de liaison ;
+- le formulaire envoie uniquement un libellé appareil, une famille OS et une version agent ;
+- le dashboard affiche le code temporaire, le deep link et l'expiration ;
+- aucun token appareil, hash de token, hostname, identifiant machine, chemin local, contenu de fichier, diff, session ou rapport n'est affiché ;
+- la création du code ne confirme pas l'installation, ne démarre pas le heartbeat, le watcher, la synchronisation de sessions, les rapports, l'export ou le partage.
+
+## Fondations confirmation agent Phase 3H
+
+La Phase 3H ajoute les primitives locales côté agent pour confirmer une liaison :
+
+- parsing strict de `ghostcommit://agent/link?code=GC-XXXXXX` ;
+- rejet générique des liens ou codes invalides ;
+- confirmation impossible sans action explicite utilisateur ;
+- appel préparé vers `POST /api/v1/agent/link/confirm` avec uniquement code, libellé appareil, OS et version agent ;
+- aucun watcher, heartbeat, scan local, synchronisation de sessions, rapport, export ou partage n'est démarré par cette fondation.
+
+## Stockage token agent et heartbeat Phase 3I
+
+La Phase 3I ajoute les primitives locales suivantes :
+
+- stockage du token appareil via une interface de coffre sécurisé injectable ;
+- aucune écriture du token appareil dans `config.json` ;
+- suppression du token via la même interface ;
+- heartbeat explicite vers `POST /api/v1/agent/heartbeat` avec le token appareil ;
+- aucun body de heartbeat, watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.
+
+## Protocole Electron Phase 3J
+
+La Phase 3J branche les fondations de liaison dans l'agent Electron :
+
+- gestion de `ghostcommit://agent/link?code=GC-XXXXXX` au démarrage ou via seconde instance ;
+- mise en file des liens jusqu'à initialisation de l'agent ;
+- confirmation utilisateur obligatoire avant appel backend ;
+- envoi d'un heartbeat explicite après liaison réussie ;
+- aucun watcher, scan local, synchronisation de sessions, rapport, export ou partage déclenché.
+
+## Déconnexion agent locale Phase 3K
+
+La Phase 3K ajoute un contrôle local utilisateur dans l'agent Electron :
+
+- action explicite `Effacer la liaison agent locale` dans le menu tray ;
+- suppression du token appareil via le coffre sécurisé ;
+- effacement du token utilisateur legacy encore présent dans `config.json` ;
+- arrêt des watchers et du tracker local actifs ;
+- aucun appel heartbeat, synchronisation de sessions, révocation distante, rapport, export ou partage déclenché.
+
+Cette action est locale. La révocation serveur reste contrôlée depuis le dashboard via l'endpoint propriétaire existant.
+
+## Durcissement tray legacy Phase 3L
+
+La Phase 3L neutralise les anciens contrôles Electron qui pouvaient démarrer une surveillance locale hors flux explicite :
+
+- le menu tray n'affiche plus les chemins absolus des dossiers configurés ;
+- le sous-menu affiche uniquement un résumé par nombre ;
+- l'action legacy `Ajouter un dossier` devient une guidance vers le dashboard ;
+- aucun picker local, watcher, scan, synchronisation de sessions, rapport, export ou partage n'est déclenché.
+
+## Autorisation projet locale Phase 3M
+
+La Phase 3M branche l'action tray `Autoriser un projet Git local` sur le flux d'autorisation local :
+
+- le picker de dossier ne s'ouvre qu'après une action utilisateur explicite ;
+- seul un repository Git local peut produire un brouillon d'autorisation ;
+- la confirmation Electron affiche uniquement nom, alias safe, nombre de patterns ignorés et branche optionnelle ;
+- après confirmation, l'agent appelle `POST /api/v1/projects` avec le token utilisateur et le payload safe ;
+- le chemin absolu reste local-only et n'est jamais envoyé au backend ;
+- aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage n'est déclenché.
+
+## Mapping projet local Phase 3N
+
+La Phase 3N conserve localement le lien entre le projet backend autorisé et le dossier Git choisi :
+
+- le mapping est écrit uniquement après retour d'un `projectId` valide par `POST /api/v1/projects` ;
+- le fichier local contient l'id projet, le nom affiché, l'alias safe, le chemin local root, `collectionEnabled: false` et la date d'autorisation ;
+- le chemin absolu reste dans l'agent Electron et n'est pas transmis au backend ;
+- une nouvelle autorisation du même projet met à jour le mapping sans doublon ;
+- cette étape n'active toujours aucun watcher, scan local, heartbeat automatique, synchronisation de sessions, rapport, export ou partage.
+
+## Contrôles locaux projet Phase 3O
+
+La Phase 3O ajoute des contrôles locaux dans le tray pour les projets autorisés :
+
+- le tray affiche les projets par nom affiché uniquement, jamais par chemin absolu ;
+- `Démarrer le suivi local` et `Mettre en pause le suivi local` modifient seulement le flag local `collectionEnabled` ;
+- un projet manquant affiche une alerte locale générique ;
+- cette étape ne démarre pas encore `fileWatcher`, scan local, synchronisation de sessions, heartbeat automatique, rapport, export ou partage.
+
+## Watcher projet autorisé Phase 3P
+
+La Phase 3P durcit le watcher local sans l'activer dans la synchronisation de sessions :
+
+- `watchAuthorizedProject` refuse les mappings dont `collectionEnabled` n'est pas `true` ;
+- le watcher observe uniquement le root local du projet autorisé ;
+- les événements `authorizedChanges` contiennent seulement `projectId`, `localAlias`, chemin relatif POSIX filtré, type d'événement et horodatage ;
+- les fichiers hors projet et les chemins sensibles (`.git`, `node_modules`, `.env*`, clés/certificats, `secrets`, `private`, etc.) sont ignorés localement ;
+- aucun chemin absolu, contenu de fichier, diff, hostname, identifiant machine, token ou secret n'est émis ;
+- cette capacité n'est pas encore connectée à `ActivityTracker` ni au backend : aucune session, rapport, export ou partage n'est produit par cette étape.
+
+## Contrôles watcher explicites Phase 3Q
+
+La Phase 3Q rend les contrôles locaux effectifs sans élargir la collecte :
+
+- `Démarrer le suivi local` active le mapping puis démarre uniquement le watcher autorisé du projet ;
+- `Mettre en pause le suivi local` désactive le mapping et arrête uniquement ce watcher ;
+- un mapping absent n'ouvre ni ne ferme de watcher ;
+- si le watcher refuse le démarrage, le projet revient immédiatement à l'état local en pause ;
+- aucune session n'est créée, stockée ou synchronisée, et aucun heartbeat, rapport, export ou partage n'est déclenché.

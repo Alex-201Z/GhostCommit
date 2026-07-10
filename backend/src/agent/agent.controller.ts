@@ -1,0 +1,49 @@
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AgentAuthenticatedRequest, AgentTokenGuard } from './agent-token.guard';
+import { AgentService } from './agent.service';
+import { AgentLinkConfirmDto, AgentLinkRequestDto } from './dto/agent-link.dto';
+
+@ApiTags('Agent')
+@ApiBearerAuth()
+@Controller('agent')
+export class AgentController {
+  constructor(private readonly agent: AgentService) {}
+
+  @Post('link-request')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create a short-lived local agent link request' })
+  createLinkRequest(@Req() req: Request, @Body() dto: AgentLinkRequestDto) {
+    return this.agent.createLinkRequest((req.user as { id: string }).id, dto);
+  }
+
+  @Post('link/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Confirm a local agent link request and issue a device token once' })
+  confirmLink(@Req() req: Request, @Body() dto: AgentLinkConfirmDto) {
+    return this.agent.confirmLink((req.user as { id: string }).id, dto);
+  }
+
+  @Get('installations')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'List local agent installations for the authenticated user' })
+  installations(@Req() req: Request) {
+    return this.agent.listInstallations((req.user as { id: string }).id);
+  }
+
+  @Post('installations/:id/revoke')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Revoke an agent installation immediately' })
+  revoke(@Req() req: Request, @Param('id') id: string) {
+    return this.agent.revoke((req.user as { id: string }).id, id);
+  }
+
+  @Post('heartbeat')
+  @UseGuards(AgentTokenGuard)
+  @ApiOperation({ summary: 'Record a privacy-safe local agent heartbeat' })
+  heartbeat(@Req() req: AgentAuthenticatedRequest) {
+    return this.agent.heartbeat(req.agentInstallation!.id);
+  }
+}

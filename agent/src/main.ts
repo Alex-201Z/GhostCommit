@@ -6,6 +6,18 @@ import { FileWatcher } from './services/fileWatcher';
 import { GitDetector } from './services/gitDetector';
 import { StorageService } from './services/storage';
 import { ActivityTracker } from './services/activityTracker';
+import { getStartupPolicy } from './services/startupPolicy';
+import { AgentCredentialStore } from './services/agentCredentials';
+import { AgentHeartbeatService } from './services/agentHeartbeat';
+import { AgentLinkingService } from './services/agentLinking';
+import { AgentLinkFlow } from './services/agentLinkFlow';
+import { extractGhostCommitLink, GhostCommitProtocolHandler } from './services/agentProtocol';
+import { AgentConnectionControlService } from './services/agentConnectionControl';
+import { createPrivacySafeWatchControls } from './services/trayPrivacy';
+import { ProjectSelectionService, type ProjectAuthorizationDraft } from './services/projectSelection';
+import { ProjectAuthorizationFlow } from './services/projectAuthorizationFlow';
+import { LocalProjectAuthorizationStore } from './services/projectAuthorizationStore';
+import { ProjectCollectionControlService } from './services/projectCollectionControl';
 
 class GhostCommitAgent {
   private tray: Tray | null = null;
@@ -16,6 +28,15 @@ class GhostCommitAgent {
   private gitDetector: GitDetector;
   private storage: StorageService;
   private activityTracker: ActivityTracker;
+  private credentials: AgentCredentialStore;
+  private heartbeat: AgentHeartbeatService;
+  private linkFlow: AgentLinkFlow;
+  private protocolHandler: GhostCommitProtocolHandler;
+  private connectionControl: AgentConnectionControlService;
+  private projectSelection: ProjectSelectionService;
+  private projectAuthorizationFlow: ProjectAuthorizationFlow;
+  private projectAuthorizationStore: LocalProjectAuthorizationStore;
+  private projectCollectionControl: ProjectCollectionControlService;
 
   constructor() {
     this.config = new ConfigManager();
@@ -23,12 +44,48 @@ class GhostCommitAgent {
     this.fileWatcher = new FileWatcher();
     this.gitDetector = new GitDetector();
     this.storage = new StorageService();
+    this.credentials = new AgentCredentialStore();
     this.activityTracker = new ActivityTracker(
       this.fileWatcher,
       this.gitDetector,
       this.apiClient,
       this.storage,
     );
+    const linking = new AgentLinkingService({
+      confirmLink: (payload, userAccessToken) => this.apiClient.confirmAgentLink(payload, userAccessToken),
+      saveDeviceToken: (agentToken) => this.credentials.saveDeviceToken(agentToken),
+    });
+    this.heartbeat = new AgentHeartbeatService({
+      getDeviceToken: () => this.credentials.getDeviceToken(),
+      heartbeat: (agentToken) => this.apiClient.sendAgentHeartbeat(agentToken),
+    });
+    this.connectionControl = new AgentConnectionControlService({
+      clearDeviceToken: () => this.credentials.clearDeviceToken(),
+      clearUserToken: () => this.config.setToken(''),
+      stopWatching: () => this.fileWatcher.stopAll(),
+      stopActivityTracking: () => this.activityTracker.stop(),
+    });
+    this.projectSelection = new ProjectSelectionService();
+    this.projectAuthorizationStore = new LocalProjectAuthorizationStore(app.getPath('userData'));
+    this.projectCollectionControl = new ProjectCollectionControlService({
+      setProjectCollectionEnabled: (projectId, collectionEnabled) =>
+        this.projectAuthorizationStore.setProjectCollectionEnabled(projectId, collectionEnabled),
+      watchAuthorizedProject: (project) => this.fileWatcher.watchAuthorizedProject(project),
+      unwatchPath: (localRootPath) => this.fileWatcher.unwatchPath(localRootPath),
+    });
+    this.projectAuthorizationFlow = new ProjectAuthorizationFlow({
+      selection: this.projectSelection,
+      createProject: (payload, userAccessToken) => this.apiClient.createProject(payload, userAccessToken),
+      saveAuthorizedProject: (mapping) =>
+        this.projectAuthorizationStore.saveAuthorizedProject(mapping),
+      requestUserConfirmation: (draft) => this.requestProjectAuthorizationConfirmation(draft),
+    });
+    this.linkFlow = new AgentLinkFlow({
+      confirmLink: (input, options) => linking.confirmLink(input, options),
+      sendHeartbeat: () => this.heartbeat.sendHeartbeat(),
+      requestUserConfirmation: (linkCode) => this.requestAgentLinkConfirmation(linkCode),
+    });
+    this.protocolHandler = new GhostCommitProtocolHandler((linkUrl) => this.handleAgentLink(linkUrl));
 
     this.setupActivityTrackerListeners();
   }
@@ -37,14 +94,22 @@ class GhostCommitAgent {
     // Create system tray
     this.createTray();
 
-    // Start watching configured paths
+    // Phase 3C privacy boundary: never start watching previous local paths
+    // automatically. A later explicit activation flow may opt into watching.
     const watchPaths = this.config.getWatchPaths();
-    if (watchPaths.length > 0) {
+    const startupPolicy = getStartupPolicy(watchPaths);
+    if (startupPolicy.shouldAutoWatchConfiguredPaths) {
       watchPaths.forEach((path) => this.fileWatcher.watchPath(path));
-    } else {
+    } else if (startupPolicy.shouldShowSetupPrompt) {
       // If no paths configured, show setup dialog
       this.showSetupDialog();
     }
+
+    await this.protocolHandler.markReady();
+  }
+
+  receiveProtocolLink(linkUrl: string): void {
+    this.protocolHandler.receive(linkUrl);
   }
 
   private createTray(): void {
@@ -66,6 +131,11 @@ class GhostCommitAgent {
     const isAuthenticated = this.apiClient.isAuthenticated();
     const activeSession = this.activityTracker.getActiveSession();
     const watchedPaths = this.fileWatcher.getWatchedPaths();
+    const watchControls = createPrivacySafeWatchControls(watchedPaths, {
+      openFolder: (localPath) => shell.showItemInFolder(localPath),
+      startProject: (projectId) => this.setLocalProjectCollection(projectId, true),
+      pauseProject: (projectId) => this.setLocalProjectCollection(projectId, false),
+    }, this.projectAuthorizationStore.listAuthorizedProjects());
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -87,22 +157,25 @@ class GhostCommitAgent {
         click: () => this.showDashboard(),
       },
       {
-        label: `Dossiers surveillés (${watchedPaths.length})`,
-        submenu: watchedPaths.length > 0
-          ? watchedPaths.map((p) => ({
-              label: p,
-              click: () => shell.showItemInFolder(p),
-            }))
-          : [{ label: 'Aucun dossier', enabled: false }],
+        label: watchControls.watchSummary.label,
+        submenu: watchControls.watchSummary.items,
       },
       {
-        label: 'Ajouter un dossier',
-        click: () => this.addWatchFolder(),
+        label: watchControls.projectControls.label,
+        submenu: watchControls.projectControls.items,
+      },
+      {
+        label: watchControls.addProjectLabel,
+        click: () => void this.authorizeLocalGitProject(),
       },
       { type: 'separator' },
       {
         label: isAuthenticated ? 'Se déconnecter' : 'Se connecter',
-        click: () => (isAuthenticated ? this.logout() : this.login()),
+        click: () => (isAuthenticated ? void this.logout() : this.login()),
+      },
+      {
+        label: 'Effacer la liaison agent locale',
+        click: () => void this.disconnectLocalAgent(),
       },
       { type: 'separator' },
       {
@@ -135,40 +208,177 @@ class GhostCommitAgent {
     });
   }
 
-  private async addWatchFolder(): Promise<void> {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-      title: 'Sélectionner un dossier à surveiller',
+  private async requestAgentLinkConfirmation(linkCode: string) {
+    const userAccessToken = this.config.getToken();
+    if (!userAccessToken) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Connexion requise',
+        message: 'Connectez-vous au dashboard avant de lier cet agent. Aucune collecte n’a été démarrée.',
+      });
+      return { confirmed: false };
+    }
+
+    const result = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Lier cet agent GhostCommit',
+      message:
+        'Confirmez la liaison de cet agent local. GhostCommit ne démarrera pas de surveillance ni de synchronisation de sessions.',
+      detail: `Code de liaison : ${linkCode}`,
+      buttons: ['Lier cet agent', 'Annuler'],
+      defaultId: 0,
+      cancelId: 1,
     });
 
-    if (!result.canceled && result.filePaths.length > 0) {
-      const folderPath = result.filePaths[0];
-      this.config.addWatchPath(folderPath);
-      this.fileWatcher.watchPath(folderPath);
-      this.updateTrayMenu();
+    return {
+      confirmed: result.response === 0,
+      userAccessToken,
+      deviceLabel: 'GhostCommit local agent',
+      osFamily: this.getOsFamily(),
+      agentVersion: app.getVersion(),
+    };
+  }
 
-      dialog.showMessageBox({
+  private async handleAgentLink(linkUrl: string): Promise<void> {
+    const result = await this.linkFlow.handleLink(linkUrl);
+    if (result.status === 'linked') {
+      this.updateTrayMenu();
+      await dialog.showMessageBox({
         type: 'info',
-        title: 'Dossier ajouté',
-        message: `Le dossier est maintenant surveillé:\n${folderPath}`,
+        title: 'Agent lié',
+        message: 'L’agent est lié. Aucune collecte n’a été démarrée.',
+      });
+      return;
+    }
+
+    if (result.status === 'error') {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Liaison impossible',
+        message: result.message,
       });
     }
   }
 
-  private showSetupDialog(): void {
-    dialog
+  private getOsFamily(): 'windows' | 'macos' | 'linux' {
+    if (process.platform === 'win32') return 'windows';
+    if (process.platform === 'darwin') return 'macos';
+    return 'linux';
+  }
+
+  private showProjectAuthorizationGuidance(): void {
+    void dialog
       .showMessageBox({
         type: 'info',
-        title: 'Bienvenue sur GhostCommit',
+        title: 'Autorisation de projet requise',
         message:
-          'Pour commencer, ajoutez les dossiers de vos projets que vous souhaitez surveiller.',
-        buttons: ['Ajouter un dossier', 'Plus tard'],
+          'La sélection locale de dossiers sera disponible uniquement via le flux explicite d’autorisation de projet. Aucune surveillance n’a été démarrée.',
+        buttons: ['Ouvrir le dashboard', 'Plus tard'],
       })
       .then((result) => {
         if (result.response === 0) {
-          this.addWatchFolder();
+          this.showDashboard();
         }
       });
+  }
+
+  private showSetupDialog(): void {
+    this.showProjectAuthorizationGuidance();
+  }
+
+  private async authorizeLocalGitProject(): Promise<void> {
+    const result = await dialog.showOpenDialog({
+      title: 'Choisir un projet Git à autoriser',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return;
+    }
+
+    const authorization = await this.projectAuthorizationFlow.authorizeLocalProject(result.filePaths[0]);
+    if (authorization.status === 'created') {
+      this.updateTrayMenu();
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Projet autorisé',
+        message:
+          'Le projet Git local est autorisé dans GhostCommit. Aucune surveillance ni synchronisation de sessions n’a été démarrée.',
+      });
+      return;
+    }
+
+    if (authorization.status === 'error') {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Autorisation impossible',
+        message: authorization.message,
+      });
+    }
+  }
+
+  private async requestProjectAuthorizationConfirmation(draft: ProjectAuthorizationDraft) {
+    const userAccessToken = this.config.getToken();
+    if (!userAccessToken) {
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Connexion requise',
+        message: 'Connectez-vous au dashboard avant d’autoriser un projet local.',
+        detail: 'Aucune surveillance ni synchronisation de sessions n’a été démarrée.',
+      });
+      return { confirmed: false };
+    }
+
+    const detail = [
+      `Nom affiché : ${draft.apiPayload.displayName}`,
+      `Alias local : ${draft.apiPayload.localAlias}`,
+      `Patterns ignorés localement : ${draft.apiPayload.ignoredPatterns.length}`,
+      draft.apiPayload.branch ? `Branche détectée : ${draft.apiPayload.branch}` : undefined,
+      'Aucun chemin absolu, contenu de fichier, hostname ou token ne sera envoyé.',
+      'Aucune surveillance ni synchronisation de sessions ne démarrera.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const result = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Autoriser ce projet Git local',
+      message: `Autoriser “${draft.apiPayload.displayName}” dans GhostCommit ?`,
+      detail,
+      buttons: ['Autoriser ce projet', 'Annuler'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    return {
+      confirmed: result.response === 0,
+      userAccessToken,
+    };
+  }
+
+  private setLocalProjectCollection(projectId: string, collectionEnabled: boolean): void {
+    const result = collectionEnabled
+      ? this.projectCollectionControl.startProject(projectId)
+      : this.projectCollectionControl.pauseProject(projectId);
+    if (result.status === 'not_found') {
+      void dialog.showMessageBox({
+        type: 'warning',
+        title: 'Projet introuvable',
+        message: 'Ce projet autorisé n’existe plus dans le cache local.',
+      });
+      return;
+    }
+
+    if (result.status === 'not_started') {
+      void dialog.showMessageBox({
+        type: 'warning',
+        title: 'Suivi local indisponible',
+        message:
+          'Le suivi local nâ€™a pas pu dÃ©marrer pour ce projet autorisÃ©. Aucune session ni synchronisation nâ€™a Ã©tÃ© crÃ©Ã©e.',
+      });
+      return;
+    }
+
+    this.updateTrayMenu();
   }
 
   private showDashboard(): void {
@@ -202,15 +412,20 @@ class GhostCommitAgent {
     });
   }
 
-  private logout(): void {
-    this.config.setToken('');
+  private async disconnectLocalAgent(): Promise<void> {
+    await this.connectionControl.disconnectLocalAgent();
     this.updateTrayMenu();
 
-    dialog.showMessageBox({
+    await dialog.showMessageBox({
       type: 'info',
-      title: 'Déconnexion',
-      message: 'Vous avez été déconnecté.',
+      title: 'Liaison locale effacée',
+      message:
+        'La liaison locale de l’agent a été effacée et les surveillances actives ont été arrêtées. Aucune collecte n’a été démarrée.',
     });
+  }
+
+  private async logout(): Promise<void> {
+    await this.disconnectLocalAgent();
   }
 
   private quit(): void {
@@ -224,7 +439,29 @@ class GhostCommitAgent {
 // App lifecycle
 app.whenReady().then(() => {
   const agent = new GhostCommitAgent();
-  agent.initialize();
+  app.setAsDefaultProtocolClient('ghostcommit');
+
+  app.on('open-url', (event, linkUrl) => {
+    event.preventDefault();
+    agent.receiveProtocolLink(linkUrl);
+  });
+
+  const startupLink = extractGhostCommitLink(process.argv);
+  if (startupLink) {
+    agent.receiveProtocolLink(startupLink);
+  }
+
+  const hasLock = app.requestSingleInstanceLock();
+  if (hasLock) {
+    app.on('second-instance', (_event, argv) => {
+      const linkUrl = extractGhostCommitLink(argv);
+      if (linkUrl) {
+        agent.receiveProtocolLink(linkUrl);
+      }
+    });
+  }
+
+  void agent.initialize();
 });
 
 // Prevent app from closing when all windows are closed (system tray app)

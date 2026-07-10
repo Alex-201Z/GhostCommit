@@ -49,10 +49,14 @@ databaseDescribe('Phase 1A authentication (PostgreSQL)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.agentInstallation.deleteMany();
+    await prisma.agentLinkRequest.deleteMany();
     await prisma.authSession.deleteMany();
     await prisma.oAuthState.deleteMany();
     await prisma.privacyConsent.deleteMany();
     await prisma.onboardingStatus.deleteMany();
+    await prisma.activitySession.deleteMany();
+    await prisma.repo.deleteMany();
     await prisma.teamMember.deleteMany();
     await prisma.team.deleteMany();
     await prisma.user.deleteMany();
@@ -72,6 +76,15 @@ databaseDescribe('Phase 1A authentication (PostgreSQL)', () => {
       .expect(302);
     expect(callback.headers.location).not.toMatch(/token|code|state/i);
     return cookieValue(callback.headers['set-cookie']);
+  }
+
+  async function bearerForCurrentProfile() {
+    const refreshCookie = await login();
+    const auth = await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', refreshCookie as string)
+      .expect(200);
+    return `Bearer ${auth.body.accessToken}`;
   }
 
   it('rejects invalid and reused OAuth state without echoing secrets', async () => {
@@ -217,5 +230,204 @@ databaseDescribe('Phase 1A authentication (PostgreSQL)', () => {
       .set('Cookie', `ghostcommit_refresh=${secret}`)
       .expect(401);
     expect(JSON.stringify(error.body)).not.toContain(secret);
+  });
+
+  it('creates and controls privacy-safe projects only for the authenticated owner', async () => {
+    const bearerA = await bearerForCurrentProfile();
+    await request(app.getHttpServer())
+      .post('/api/v1/projects')
+      .set('Authorization', bearerA)
+      .send({
+        displayName: 'GhostCommit',
+        gitProvider: 'LOCAL',
+        localAlias: 'ghostcommit-dev',
+        teamId: 'attacker-team',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/api/v1/projects')
+      .set('Authorization', bearerA)
+      .send({
+        displayName: 'GhostCommit',
+        gitProvider: 'LOCAL',
+        localAlias: 'C:\\Users\\dev\\GhostCommit',
+      })
+      .expect(400);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/projects')
+      .set('Authorization', bearerA)
+      .send({
+        displayName: 'GhostCommit',
+        gitProvider: 'LOCAL',
+        localAlias: 'ghostcommit-dev',
+        ignoredPatterns: ['dist/**', '.env*'],
+      })
+      .expect(201);
+    expect(created.body.displayName).toBe('GhostCommit');
+    expect(created.body.localAlias).toBe('ghostcommit-dev');
+    expect(JSON.stringify(created.body)).not.toMatch(/C:\\|Users|absolutePath|teamId|token/i);
+
+    const paused = await request(app.getHttpServer())
+      .post(`/api/v1/projects/${created.body.id}/pause`)
+      .set('Authorization', bearerA)
+      .expect(201);
+    expect(paused.body.trackingStatus).toBe('PAUSED');
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/projects/${created.body.id}`)
+      .set('Authorization', bearerA)
+      .send({ includeFilePathsInReports: false, excludedFromReports: true })
+      .expect(200);
+
+    profile = { githubId: 'github-b', email: 'b@example.test', username: 'bob', name: 'Bob' };
+    const bearerB = await bearerForCurrentProfile();
+    await request(app.getHttpServer())
+      .get(`/api/v1/projects/${created.body.id}`)
+      .set('Authorization', bearerB)
+      .expect(403);
+
+    const archived = await request(app.getHttpServer())
+      .post(`/api/v1/projects/${created.body.id}/archive`)
+      .set('Authorization', bearerA)
+      .expect(201);
+    expect(archived.body.trackingStatus).toBe('ARCHIVED');
+    expect(await prisma.repo.count()).toBe(1);
+  });
+
+  it('links, lists and revokes an agent without storing raw device tokens in responses', async () => {
+    const bearerA = await bearerForCurrentProfile();
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/link-request')
+      .set('Authorization', bearerA)
+      .send({
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+        hostname: 'raw-hostname-forbidden',
+      })
+      .expect(400);
+
+    const requestLink = await request(app.getHttpServer())
+      .post('/api/v1/agent/link-request')
+      .set('Authorization', bearerA)
+      .send({
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+    expect(requestLink.body.linkCode).toMatch(/^GC-[A-Z0-9]{6}$/);
+    expect(requestLink.body.deepLink).toContain('ghostcommit://agent/link');
+    expect(JSON.stringify(requestLink.body)).not.toMatch(/hostname|machine|tokenHash/i);
+
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/v1/agent/link/confirm')
+      .set('Authorization', bearerA)
+      .send({
+        linkCode: requestLink.body.linkCode,
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+    expect(confirmed.body.agentToken).toMatch(/^gca_/);
+    expect(confirmed.body.installation.status).toBe('CONNECTED');
+    expect(JSON.stringify(confirmed.body.installation)).not.toMatch(/agentToken|tokenHash/i);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/link/confirm')
+      .set('Authorization', bearerA)
+      .send({
+        linkCode: requestLink.body.linkCode,
+        deviceLabel: 'Windows dev laptop',
+      })
+      .expect(409);
+
+    const list = await request(app.getHttpServer())
+      .get('/api/v1/agent/installations')
+      .set('Authorization', bearerA)
+      .expect(200);
+    expect(list.body).toHaveLength(1);
+    expect(JSON.stringify(list.body)).not.toMatch(/agentToken|tokenHash|hostname|machine/i);
+
+    profile = { githubId: 'github-b', email: 'b@example.test', username: 'bob', name: 'Bob' };
+    const bearerB = await bearerForCurrentProfile();
+    await request(app.getHttpServer())
+      .post(`/api/v1/agent/installations/${confirmed.body.installation.id}/revoke`)
+      .set('Authorization', bearerB)
+      .expect(403);
+
+    const revoked = await request(app.getHttpServer())
+      .post(`/api/v1/agent/installations/${confirmed.body.installation.id}/revoke`)
+      .set('Authorization', bearerA)
+      .expect(201);
+    expect(revoked.body.status).toBe('REVOKED');
+    const stored = await prisma.agentInstallation.findUniqueOrThrow({
+      where: { id: confirmed.body.installation.id },
+    });
+    expect(stored.tokenHash).toBeNull();
+    expect(stored.revokedAt).toBeTruthy();
+  });
+
+  it('accepts agent heartbeats with device tokens and marks stale agents offline', async () => {
+    const bearerA = await bearerForCurrentProfile();
+    const requestLink = await request(app.getHttpServer())
+      .post('/api/v1/agent/link-request')
+      .set('Authorization', bearerA)
+      .send({
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/v1/agent/link/confirm')
+      .set('Authorization', bearerA)
+      .send({
+        linkCode: requestLink.body.linkCode,
+        deviceLabel: 'Windows dev laptop',
+        osFamily: 'windows',
+        agentVersion: '0.1.0',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer()).post('/api/v1/agent/heartbeat').expect(401);
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', 'Bearer gca_invalid')
+      .expect(401);
+
+    const heartbeat = await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(201);
+    expect(heartbeat.body.status).toBe('CONNECTED');
+    expect(heartbeat.body.id).toBe(confirmed.body.installation.id);
+    expect(JSON.stringify(heartbeat.body)).not.toMatch(/agentToken|tokenHash|hostname|machine/i);
+
+    await prisma.agentInstallation.update({
+      where: { id: confirmed.body.installation.id },
+      data: { lastSeenAt: new Date(Date.now() - 20 * 60 * 1000), status: 'CONNECTED' },
+    });
+    const staleList = await request(app.getHttpServer())
+      .get('/api/v1/agent/installations')
+      .set('Authorization', bearerA)
+      .expect(200);
+    expect(staleList.body[0].status).toBe('OFFLINE');
+
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(201)
+      .expect((response) => expect(response.body.status).toBe('CONNECTED'));
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/agent/installations/${confirmed.body.installation.id}/revoke`)
+      .set('Authorization', bearerA)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/v1/agent/heartbeat')
+      .set('Authorization', `Bearer ${confirmed.body.agentToken}`)
+      .expect(401);
   });
 });

@@ -106,3 +106,1240 @@ Validation only. No Phase 1B UI, repository connection, agent, collection or rep
 ### Gate decision
 
 The Phase 1A PostgreSQL validation gate is closed on the PR branch. Phase 1A can be considered validated once the final documentation-only run remains green and the PR is merged into `main`. Phase 1B remains unstarted.
+
+## 2026-07-02 — Phase 1A PostgreSQL CI gate re-audit
+
+### Scope
+
+Re-verify the already merged Phase 1A validation gate against the current repository state and the historical GitHub Actions evidence. No Phase 1B UI, public page, onboarding UI, app shell, repository connection, agent, reporting or product-scope code was added.
+
+### CI contract re-verified
+
+- `.github/workflows/ci.yml` starts PostgreSQL with `postgres:16-alpine`.
+- `DATABASE_URL` targets `postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`.
+- Dependencies install with `npm ci --ignore-scripts`.
+- Prisma Client generation runs before `prisma migrate deploy`.
+- `prisma migrate deploy` runs before `npm run test:e2e --workspace @ghostcommit/backend`.
+- `RUN_DATABASE_TESTS=true` is defined in CI.
+- `backend/test/auth.e2e-spec.ts` throws when `CI=true` and `RUN_DATABASE_TESTS=true` is missing, so PostgreSQL e2e cannot be silently skipped in CI.
+
+### Phase 1A scenario coverage
+
+The original merged Phase 1A test file at commit `7770ac2` contains exactly six PostgreSQL scenarios:
+
+1. invalid, expired and consumed OAuth state, with no secret echoing;
+2. user creation/reconnection and single personal workspace creation;
+3. refresh token rotation, replay rejection and family revocation;
+4. versioned consent, personal workspace idempotence and no collection activation;
+5. user A/B ownership protection through strict DTO validation;
+6. logout revocation, cookie clearing and no secret echoing in refresh errors.
+
+The current `backend/test/auth.e2e-spec.ts` still contains those six scenarios; later Phase 3 PostgreSQL scenarios are additional coverage and are not part of the Phase 1A gate.
+
+### Evidence
+
+- Historical passing GitHub Actions run: https://github.com/Alex-201Z/GhostCommit/actions/runs/27988421002
+- Job: `quality`
+- Head SHA: `18a92465d4f10abe58f4a8fbcb064e3d6da0661a`
+- Result: `SUCCESS`
+- Passing steps included container initialization, dependency installation, Prisma generation, migration deploy, lint, typecheck, unit tests, PostgreSQL integration tests and build.
+
+Fresh local checks on 2026-07-02:
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `CI=true` without `RUN_DATABASE_TESTS=true` plus `npm run test:e2e --workspace @ghostcommit/backend`: failed with the expected hard error preventing silent skips.
+- `npm test`: passed; backend 10/10, agent 22/22, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+
+### Gate decision
+
+Phase 1A can be considered validated against real PostgreSQL via GitHub Actions CI. No Phase 1B work was started during this re-audit.
+
+## 2026-07-01 — Phase 1B-A public interface and login
+
+### Scope
+
+Public dashboard/login foundation only. No onboarding UI, app shell, repository connection, agent linking, activity collection, timeline, reporting or export work was started.
+
+### Implementation
+
+- Replaced the Phase 0 health page with real dashboard routes:
+  - `/` public landing page;
+  - `/login`;
+  - `/auth/callback`;
+  - `/app/*` protected route guard placeholder.
+- Added privacy-first product copy: proof-of-work positioning, three benefits, confidentiality section and a static private report example.
+- Connected the login page to the Phase 1A backend contract through `POST /api/v1/auth/github/start`.
+- Added dashboard-side session bootstrap through `POST /api/v1/auth/refresh` with credentials included.
+- Kept the short-lived access token in React memory only; no token is written to `localStorage`, `sessionStorage` or URL fragments.
+- The callback page removes query parameters before refreshing the browser session and uses a generic safe error message.
+- Added route guard behavior: anonymous `/app/*` users redirect to `/login`; connected `/login` users redirect to `/app`.
+- Added `vite/client` types to the dashboard TypeScript config for `import.meta.env`.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard` failed with 5/5 missing Phase 1B-A route expectations against the old Phase 0 health page.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 6/6 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: initially failed because `ImportMeta.env` was not typed; passed after adding `vite/client`.
+- `npm run build --workspace @ghostcommit/dashboard`: passed after the same type fix.
+- Full verification with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+  - `npm run db:generate`: passed.
+  - `npm run db:validate`: passed.
+  - `npm run lint`: passed.
+  - `npm run typecheck`: passed.
+  - `npm test`: passed; backend 2/2 and dashboard 6/6.
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+
+### Remaining risks
+
+- Real GitHub OAuth still requires external OAuth app credentials and callback configuration.
+- The protected `/app/*` target is intentionally only a guard placeholder; the real app shell belongs to Phase 1B-C.
+- The first `npm run db:validate` attempt without `DATABASE_URL` failed as expected in this shell; validation passes when the test database URL is provided, matching CI behavior.
+
+## 2026-07-01 — Phase 1B-B privacy-first onboarding UI
+
+### Scope
+
+Onboarding dashboard UI only. No app shell, repository connection, agent linking, collection, activity sessions, timeline, reports or exports were started.
+
+### Implementation
+
+- Added `/onboarding` as a protected dashboard route.
+- Added a five-step flow:
+  1. welcome and product goal;
+  2. personal workspace confirmation;
+  3. how GhostCommit works;
+  4. data never collected;
+  5. consent and user control.
+- Added the required two-column transparency screen:
+  - `GhostCommit peut utiliser`;
+  - `GhostCommit ne peut jamais utiliser`.
+- Required both confirmations before consent can be submitted:
+  - the user has read the collection notice;
+  - the user understands they keep control of data and reports.
+- Connected onboarding to `GET /api/v1/onboarding/status` and `PATCH /api/v1/onboarding/status`.
+- Added loading, error, refresh/resume, back navigation and non-sensitive step persistence.
+- Updated `/login`, `/auth/callback` and `/app/*` flow so authenticated users without consent are routed through onboarding first.
+- Explicitly avoided activating collection: no agent call, repository call, activity/session call, report call, or local tracking behavior was added.
+
+### TDD and validation results
+
+- RED: dashboard tests failed because `/onboarding` was absent and `/app/*` did not enforce consent.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 9/9 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+
+### Full verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 2/2 and dashboard 9/9.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+
+## 2026-07-01 — Phase 2 Today dashboard
+
+### Scope
+
+Today dashboard only. No repository connection, agent installation/linking, project authorization, real activity collection, session mutation, report generation, export, sharing or settings mutation was started.
+
+### Implementation
+
+- Added authenticated read-only `GET /api/v1/dashboard/today`.
+- Registered a new backend `DashboardModule`.
+- Returned the privacy-safe empty/not-installed Today summary until later phases create real data.
+- Added `/app` and `/app/today` Today dashboard rendering after consent.
+- Added the neutral day header: `Voici votre activité de développement du jour`.
+- Added session, daily draft, neutral activity counters, recent sessions and checklist cards.
+- Added local-only demonstration data for active, paused, no-session, finished and agent-missing session states.
+- Kept pause confirmation and demo controls local; no future agent/session/report APIs are called.
+- Preserved the permanent `Agent non installé — aucune activité collectée` shell status.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- dashboard.contract.spec.ts --runInBand` failed because `dashboard.controller` and `dashboard.service` did not exist.
+- RED: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` failed because `/app` still rendered the Phase 1B-C welcome/empty state and no demo button existed.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- dashboard.contract.spec.ts --runInBand` passed with 2/2 tests.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 16/16 tests.
+- `npm run lint`: passed across all four workspaces.
+- `npm run typecheck`: passed across all four workspaces.
+
+### Full verification
+
+Pending for this subphase:
+
+- `npm run db:generate`
+- `npm run db:validate`
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
+- `npm run build`
+- `git diff --check`
+
+## 2026-07-01 — Phase 1B-C app shell
+
+### Scope
+
+Protected dashboard shell and useful empty app routes only. No repository connection, agent installation/linking, project authorization, collection, sessions, reports, exports or settings mutations were started.
+
+### Implementation
+
+- Added the consent-gated `/app/*` shell after onboarding.
+- Added responsive sidebar navigation with keyboard-focusable links.
+- Added header with the current personal workspace name from onboarding status when available.
+- Added profile button placeholder and non-intrusive notification area.
+- Added permanent status badge: `Agent non installé — aucune activité collectée`.
+- Prepared useful empty states for:
+  - `/app`;
+  - `/app/projects`;
+  - `/app/activity`;
+  - `/app/reports`;
+  - `/app/settings`.
+- Verified the shell does not call future repository, activity, report or agent APIs.
+
+### TDD and validation results
+
+- RED: dashboard tests failed because the protected app area still rendered the Phase 1B-C placeholder and lacked shell roles/routes.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 14/14 tests.
+- `npm run lint --workspace @ghostcommit/dashboard`: passed.
+- `npm run typecheck --workspace @ghostcommit/dashboard`: passed.
+- `npm run build --workspace @ghostcommit/dashboard`: passed.
+
+### Full verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 2/2 and dashboard 14/14.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+
+## 2026-07-01 — Phase 2 final verification
+
+Executed with `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`:
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 4/4, dashboard 16/16, agent/shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed.
+
+### Gate decision
+
+Phase 2 is complete locally. The Today dashboard is privacy-safe, read-only for real API data, and uses only local demo data for non-empty UI states. Phase 3 has not been started.
+
+## 2026-07-01 — Phase 3A backend projects and agent foundations
+
+### Scope
+
+Backend foundations for Phase 3 only:
+
+- local agent link request, confirmation, installation listing and revocation;
+- explicitly authorized project creation/list/detail/update/pause/resume/archive;
+- Prisma schema and migration for agent installations, agent link requests and project tracking settings.
+
+No dashboard project UI, agent Electron watcher rewrite, file watching activation, session synchronization, activity timeline, report generation, export or sharing was started.
+
+### Privacy decisions
+
+- Agent link requests accept only `deviceLabel`, `osFamily` and `agentVersion`.
+- DTO validation rejects raw hostnames, machine IDs, absolute paths and client-provided owner fields.
+- Agent tokens are returned only once on link confirmation and stored hash-only.
+- Revocation clears token hash/expiry and marks the installation `REVOKED`.
+- Project creation derives the personal workspace from the JWT user; clients cannot pass `teamId` or `userId`.
+- Projects store a safe `localAlias`, not an absolute local folder path.
+- Project privacy settings include ignored patterns, report path inclusion and report exclusion flags.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts projects.contract.spec.ts --runInBand` failed because `agent.controller`, `projects.controller` and DTOs did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts projects.contract.spec.ts --runInBand` passed with 6/6 tests.
+- PostgreSQL e2e scenarios were added to `backend/test/auth.e2e-spec.ts` for project ownership, absolute path rejection, agent linking, consumed-code replay, A/B revocation isolation and token hash clearing.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, dashboard 16/16, agent/shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+
+### Blocked local PostgreSQL verification
+
+Local `prisma migrate deploy` and `npm run test:e2e --workspace @ghostcommit/backend` could not run because PostgreSQL was not reachable and Docker Desktop was not running:
+
+- Prisma/Node connection check: `Can't reach database server at localhost:5432`.
+- `docker compose up -d postgres redis`: failed to connect to `dockerDesktopLinuxEngine`.
+
+### GitHub Actions PostgreSQL validation
+
+Phase 3A was validated through draft PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28539045218
+- Job: https://github.com/Alex-201Z/GhostCommit/actions/runs/28539045218/job/84607764912
+- Head SHA: `7d9fd42b311dd6bd9704f56df4d5487ede74c042`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### Gate decision
+
+Phase 3A backend foundations are validated. Phase 3B may start next, limited to dashboard project/agent screens and still without activating Electron collection.
+
+## 2026-07-01 — Phase 3B dashboard project and agent screens
+
+### Scope
+
+Dashboard screens for existing Phase 3A backend contracts only:
+
+- `/app/projects` lists explicitly authorized projects from `GET /api/v1/projects`;
+- `/app/projects/:id` shows safe project detail and privacy settings from `GET /api/v1/projects/:id`;
+- `/app/settings/agent` lists linked local agent installations from `GET /api/v1/agent/installations`.
+
+No Electron watcher, file watching, folder selection implementation, session sync, activity timeline, report generation, export, sharing or public-page work was started.
+
+### Privacy decisions
+
+- Project UI renders only display name, provider, safe local alias, status, neutral recent-activity wording and privacy settings.
+- Agent UI renders only user-facing device label, OS family, agent version, status and neutral last-contact wording.
+- The UI does not render absolute paths, file contents, code diffs, token material, raw hostnames or stable machine identifiers.
+- Add-project, pause and revoke controls are visible affordances only in this subphase; mutation wiring remains deferred.
+- Legacy `/repos/*` flows are not used by the dashboard V1 project screens.
+
+### TDD and validation results
+
+- RED: dashboard tests were added first for project list, project empty state, project detail privacy controls and agent installation listing; they failed against the previous placeholder shell.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000` passed with 20/20 tests after implementing the screens.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `npm run db:validate`: initially failed because `DATABASE_URL` was not set in the shell.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, dashboard 20/20, agent/shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3B dashboard screens are complete locally and must remain green in the PR CI before merge. Phase 3C may start next, limited to user-controlled local agent/project selection foundations, and must still preserve the privacy model before any real collection is enabled.
+
+## 2026-07-02 — Phase 3C local agent/project selection foundations
+
+### Scope
+
+Agent-side foundations for explicit local project selection only:
+
+- prepare a local authorization draft from a user-selected Git repository folder;
+- keep the absolute local root path local-only;
+- produce a backend-compatible safe `POST /projects` payload only after explicit confirmation;
+- normalize default and user-provided ignored patterns before project creation;
+- prevent automatic watching of previously configured paths at agent startup;
+- prevent automatic pending-session sync when `ActivityTracker` is constructed.
+
+No Electron onboarding UI, backend mutation wiring, heartbeat, session synchronization, activity timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Non-Git folders are rejected so arbitrary personal directories cannot become project drafts.
+- The project payload includes display name, `LOCAL` provider, safe alias, optional branch and ignored patterns only.
+- Absolute paths, parent directory paths, file contents, code diffs, raw hostnames, stable machine identifiers, token material and secrets are not included in the payload.
+- Legacy `ActivityTracker` sync is opt-in only after this phase; future code must not enable it until session payload filtering and API revalidation are implemented.
+- Existing configured local paths are not auto-watched on startup; user action remains required before any future collection activation.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts` failed because `projectSelection` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectSelection.test.ts` passed with 4/4 tests.
+- RED: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts` failed because constructing `ActivityTracker` synchronized one pending session.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- activityTracker.test.ts projectSelection.test.ts` passed with 5/5 tests.
+- RED: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts` failed because `startupPolicy` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- startupPolicy.test.ts activityTracker.test.ts projectSelection.test.ts` passed with 7/7 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 20/20, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### GitHub Actions validation
+
+Phase 3C was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28553173127
+- Job: https://github.com/Alex-201Z/GhostCommit/actions/runs/28553173127/job/84654798264
+- Head SHA before documentation amend: `2f1bb77`.
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### Gate decision
+
+Phase 3C local foundations are validated locally and in GitHub Actions PostgreSQL CI. The next Phase 3 subphase may wire the explicit user-controlled project authorization flow, but Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3D dashboard project authorization flow
+
+### Scope
+
+Dashboard project authorization flow using the existing Phase 3A backend endpoint:
+
+- `/app/projects` opens an explicit add-project form from the `Ajouter un projet` control;
+- the form collects safe metadata only: display name, safe local alias, optional branch and ignored patterns;
+- an explicit confirmation checkbox is required before submitting;
+- submission calls authenticated `POST /api/v1/projects`;
+- the returned project is added to the visible list.
+
+No Electron folder picker, file watcher activation, heartbeat, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The dashboard form does not request or render absolute local paths.
+- The create-project payload never includes file contents, code diffs, token material, raw hostnames, machine identifiers or secrets.
+- The flow calls only the project API; it does not call activity, session, report or agent sync endpoints.
+- The access token remains in memory and is used only as the Authorization header.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="creates a local project"` failed because the add-project button was still a placeholder and no labeled form fields existed.
+- GREEN: the same targeted test passed after implementing the explicit form and project mutation.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed with 21/21 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 21/21, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3D dashboard project authorization flow is complete locally. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3E dashboard project and agent controls
+
+### Scope
+
+Dashboard control mutations for existing Phase 3A endpoints:
+
+- pause, resume and archive owned projects from `/app/projects/:id`;
+- revoke owned agent installations from `/app/settings/agent`;
+- update visible statuses from API responses.
+
+No Electron watcher activation, heartbeat, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Mutations send only authenticated control requests to existing owner-scoped endpoints.
+- No local path, file content, code diff, token material, raw hostname, machine identifier, secret or activity payload is sent or rendered.
+- Agent revocation updates visible status only; it does not start heartbeat or sync.
+- Project pause/archive controls do not contact activity, session, report, export or agent sync endpoints.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="pause and archive|revoke an agent"` failed because archive and revoke controls were placeholders.
+- GREEN: the same targeted test passed after wiring the project and agent control mutations.
+- `npm run test --workspace @ghostcommit/dashboard -- --reporter=verbose --testTimeout=10000`: passed with 23/23 tests.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 23/23, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3E dashboard project and agent controls are complete locally. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3F agent heartbeat and offline status
+
+### Scope
+
+Backend control-plane heartbeat for linked agents:
+
+- `POST /api/v1/agent/heartbeat` authenticated with the device `gca_*` token;
+- hash-only token lookup;
+- `lastSeenAt` refresh and `CONNECTED` status update;
+- stale `CONNECTED` installations become `OFFLINE` during installation listing;
+- revoked/invalid/missing tokens are rejected.
+
+No file watching, local scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Heartbeat has no request body and accepts no hostname, machine identifier, path, file content, code diff, secret, activity event or session payload.
+- Heartbeat/list responses return only the public installation shape and never return token material or token hashes.
+- Offline is treated as device connectivity only; it must not be displayed or used as productivity, presence or performance inference.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand` failed because `heartbeat` was not exposed by `AgentController`.
+- GREEN: `npm run test --workspace @ghostcommit/backend -- agent.contract.spec.ts --runInBand` passed with 3/3 tests.
+- PostgreSQL e2e coverage was added for valid heartbeat, invalid token rejection, stale offline transition, reconnect heartbeat and revoked-token rejection. Local execution remains dependent on PostgreSQL availability and is expected to be validated in GitHub Actions.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 23/23, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3F is validated locally and in GitHub Actions PostgreSQL CI run `28554286795` for head SHA `216f466`. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3G dashboard agent link request flow
+
+### Scope
+
+Dashboard control-plane pairing request for the existing Phase 3A backend endpoint:
+
+- `/app/settings/agent` renders a user-initiated link-request form;
+- the form collects only device label, OS family and agent version;
+- submission calls authenticated `POST /api/v1/agent/link-request`;
+- the dashboard displays the temporary link code, deep link and expiry returned by the backend.
+
+No Electron deep-link handling, device confirmation, token issuance in the dashboard, heartbeat activation, local scanning, file watching, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The dashboard never asks for or renders raw hostname, stable machine identifier, local path, file content, code diff, token material, token hash, session payload or report data.
+- The short-lived access token remains in memory and is used only as the Authorization header.
+- The link request does not confirm an installation and does not start any collection-plane endpoint.
+- UI copy avoids displaying forbidden sensitive-data terms as if they were captured values.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="agent link request"` failed before the link-request form existed.
+- GREEN: `npm run test --workspace @ghostcommit/dashboard -- App.test.tsx --reporter=verbose --testNamePattern="agent link request|agent settings"` passed with 2/2 targeted tests after adding the form and correcting the asynchronous installation-list assertion.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 7/7, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### GitHub Actions validation
+
+Phase 3G was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28609390636
+- Job: `quality`
+- Head SHA: `1960330`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### Gate decision
+
+Phase 3G dashboard agent link request flow is complete locally and validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3H agent link confirmation foundations
+
+### Scope
+
+Agent-local foundations for consuming dashboard pairing links:
+
+- parse `ghostcommit://agent/link?code=GC-XXXXXX`;
+- reject invalid schemes, paths and codes with generic errors;
+- require explicit user confirmation before confirming a link;
+- call the existing `POST /api/v1/agent/link/confirm` contract through an injectable API boundary;
+- keep watcher, heartbeat, local project scanning and session sync inactive.
+
+No rendered Electron confirmation UI, protocol registration, secure device-token persistence, heartbeat activation, file watching, local scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The parser returns only a validated pairing code and never exposes extra query parameters.
+- The confirmation payload contains only link code, device label, OS family and agent version.
+- The user-session token required by the current backend JWT guard is passed only to the confirmation call and is not persisted by this foundation.
+- The returned device token is left to a later secure persistence subphase; it is not logged, rendered, or used to start heartbeat here.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentLinking.test.ts` failed because `agentLinking` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- agentLinking.test.ts` passed with 4/4 tests after adding `AgentLinkingService` and the API client confirmation method.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 11/11, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3H agent link confirmation foundations are complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3H was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28610029884
+- Job: `quality`
+- Head SHA: `9b9b337`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+## 2026-07-02 — Phase 3I secure token storage and explicit heartbeat
+
+### Scope
+
+Agent-local credential and heartbeat primitives:
+
+- store the one-time device token through an injectable secure vault;
+- keep the token out of `config.json`;
+- clear the device token through the same vault boundary;
+- persist the returned device token after confirmed link success;
+- expose an explicit heartbeat service that uses the stored device token;
+- add an API client method for bodyless `POST /agent/heartbeat`.
+
+No rendered Electron confirmation UI, protocol registration, heartbeat scheduler, watcher activation, local project scanning, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The default vault lazy-loads `keytar` so native secret storage is not imported during tests or CI module loading.
+- Device token persistence is behind an injectable interface and is test-covered without touching real OS keychains.
+- The user-session token used for link confirmation remains transient and is not persisted by the agent.
+- Heartbeat sends only the device token in the Authorization header and no request body.
+- Heartbeat does not start or imply collection; it is device connectivity only, not presence or productivity.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentCredentials.test.ts agentHeartbeat.test.ts agentLinking.test.ts` failed because `agentCredentials` and `agentHeartbeat` did not exist, and `AgentLinkingService` did not persist the returned device token.
+- GREEN: the same targeted command passed with 9/9 tests after adding secure credential storage, explicit heartbeat and token persistence after link confirmation.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 16/16, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3I secure token storage and explicit heartbeat is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3I was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28610478740
+- Job: `quality`
+- Head SHA: `611739c`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### CI gate decision
+
+Phase 3I secure token storage and explicit heartbeat is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3J Electron protocol and confirmation flow
+
+### Scope
+
+Electron-level agent linking flow:
+
+- extracts `ghostcommit://agent/link?code=GC-XXXXXX` links from process arguments;
+- queues protocol links until the agent is initialized;
+- registers the `ghostcommit` protocol with Electron;
+- handles macOS `open-url` and second-instance startup arguments;
+- prompts the user before confirming an agent link;
+- confirms the link through the existing link service;
+- sends one explicit heartbeat after successful confirmation.
+
+No custom rendered Electron window, watcher activation, local project scan, activity session sync, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Only `ghostcommit://agent/link?...` arguments are handled; unrelated URLs or arguments are ignored.
+- Invalid links return a generic message without echoing unsafe query values.
+- User cancellation performs no backend call, credential persistence or heartbeat.
+- The confirmation prompt displays only the pairing code and privacy-safe explanatory text.
+- Successful linking still does not start file watching, local scanning, session sync, reporting, export or sharing.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts` failed because `agentProtocol` and `agentLinkFlow` did not exist.
+- GREEN: the same targeted command passed with 6/6 tests after adding protocol extraction/queueing and the confirmation orchestration flow.
+- `npm run test --workspace @ghostcommit/agent -- agentProtocol.test.ts agentLinkFlow.test.ts agentLinking.test.ts agentHeartbeat.test.ts agentCredentials.test.ts`: passed with 15/15 targeted tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed across backend, agent, dashboard and shared workspaces.
+- `npm run typecheck`: passed across backend, agent, dashboard and shared workspaces.
+- `npm test`: passed; backend 10/10, agent 22/22, dashboard 24/24, shared no test files.
+- `npm run build`: passed across backend, agent, dashboard and shared workspaces.
+- `git diff --check`: passed; only CRLF conversion warnings were emitted by Git on Windows.
+
+### Gate decision
+
+Phase 3J Electron protocol and confirmation flow is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3J was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28611092637
+- Job: `quality`
+- Head SHA: `12adf33`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### CI gate decision
+
+Phase 3J Electron protocol and confirmation flow is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3K local agent disconnect control
+
+### Scope
+
+Agent-local user control for disconnecting the local agent:
+
+- clear the stored device token from the secure credential store;
+- clear the legacy user token from local config;
+- stop active watchers and activity tracking;
+- expose the action from the Electron tray menu.
+
+No backend endpoint, remote revocation, heartbeat scheduler, file scanning, session synchronization, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- Disconnect is local and explicit.
+- It removes heartbeat credentials locally without sending token material anywhere.
+- It stops existing local collection loops instead of starting new ones.
+- It does not call heartbeat, sync sessions or remote revocation as hidden side effects.
+- Remote revocation remains the existing dashboard-owned control.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- agentConnectionControl.test.ts` failed because `agentConnectionControl` did not exist.
+- GREEN: the same targeted command passed after adding `AgentConnectionControlService`.
+- `npm run test --workspace @ghostcommit/agent`: passed with 23/23 tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 23/23, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3K local agent disconnect control is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3K was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28612247469
+- Job: `quality`
+- Head SHA: `47373e0`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### CI gate decision
+
+Phase 3K local agent disconnect control is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-02 — Phase 3L tray privacy hardening
+
+### Scope
+
+Agent tray hardening for legacy local-folder controls:
+
+- summarize configured local folders by count only;
+- stop rendering absolute paths in tray labels;
+- disable tray folder-opening behavior;
+- replace the legacy add-folder picker with dashboard authorization guidance.
+
+No backend endpoint, watcher activation, local folder scan, heartbeat, session synchronization, timeline, report generation, export, sharing or Phase 4 work was started.
+
+### Privacy decisions
+
+- The tray can acknowledge local configuration without exposing absolute paths.
+- Local folder selection remains blocked until a later explicit project/session phase owns it.
+- User guidance can open the dashboard, but it does not start collection.
+- The hardening is intentionally local; it does not mutate backend projects or agent installations.
+
+### TDD and validation results
+
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because `trayPrivacy` did not exist.
+- GREEN: the same targeted command passed after adding count-only tray controls.
+- `npm run test --workspace @ghostcommit/agent`: passed with 25/25 tests.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+
+### Verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 25/25, dashboard 24/24, shared no test files.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3L tray privacy hardening is complete locally and ready for commit/push/CI validation. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3L was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28613043523
+- Job: `quality`
+- Head SHA: `50af77d`
+- Result: `SUCCESS`.
+
+Passing CI steps:
+
+- PostgreSQL 16 service initialized.
+- `npm ci --ignore-scripts`.
+- `npm run db:generate`.
+- `prisma migrate deploy`.
+- `npm run lint`.
+- `npm run typecheck`.
+- `npm test`.
+- `npm run test:e2e --workspace @ghostcommit/backend` with `RUN_DATABASE_TESTS=true`.
+- `npm run build`.
+
+### CI gate decision
+
+Phase 3L tray privacy hardening is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3M agent-local project authorization call
+
+### Scope
+
+Agent-local wiring for the existing safe project authorization contract:
+
+- expose `Autoriser un projet Git local` from the tray;
+- open the local folder picker only after that explicit user action;
+- require a Git repository before creating a local authorization draft;
+- show a confirmation dialog with safe metadata only;
+- call authenticated `POST /api/v1/projects` only after confirmation;
+- do not start watchers, project scans, heartbeat scheduling, session synchronization, reports, export or sharing.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/apiClient.ts`
+- `agent/src/services/apiClient.test.ts`
+- `agent/src/services/projectAuthorizationFlow.ts`
+- `agent/src/services/projectAuthorizationFlow.test.ts`
+- `agent/src/services/trayPrivacy.ts`
+- `agent/src/services/trayPrivacy.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts` failed because `projectAuthorizationFlow` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts`: passed, 3/3.
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because the tray still pointed add-project guidance to the dashboard and disabled local authorization.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- apiClient.test.ts`: passed, 1/1.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 29/29.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 29/29, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### GitHub Actions validation
+
+Phase 3M was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28664990328
+- Job: `quality`
+- Head SHA: `111dd95`
+- Result: passed in 2m20s.
+- CI evidence: PostgreSQL 16 container initialized, dependencies installed with CI workflow, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3M product blocker but should be tracked for CI maintenance.
+
+### Gate decision
+
+Phase 3M is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3N local authorized-project mapping
+
+### Scope
+
+Agent-local persistence for confirmed project authorization:
+
+- save a local mapping only after `POST /projects` returns a valid project id;
+- store `projectId`, safe display fields, `localRootPath`, `collectionEnabled: false` and `authorizedAt` in the agent data directory;
+- upsert mappings by `projectId` to avoid duplicates;
+- reject mapping persistence when the backend response has no valid project id;
+- do not start watchers, project scans, heartbeat scheduling, session synchronization, reports, export or sharing.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/projectAuthorizationFlow.ts`
+- `agent/src/services/projectAuthorizationFlow.test.ts`
+- `agent/src/services/projectAuthorizationStore.ts`
+- `agent/src/services/projectAuthorizationStore.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts` failed because `projectAuthorizationStore` did not exist.
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts` failed because the flow did not save mappings and accepted backend responses without project ids.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts`: passed, 1/1.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationFlow.test.ts`: passed, 4/4.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 31/31.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 31/31, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### GitHub Actions validation
+
+Phase 3N was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28665691772
+- Job: `quality`
+- Head SHA: `d4863be`
+- Result: passed in 2m24s.
+- CI evidence: PostgreSQL 16 container initialized, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3N product blocker but remains a CI maintenance item.
+
+### Gate decision
+
+Phase 3N is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 3O local project start/pause controls
+
+### Scope
+
+Agent-local tray controls for authorized projects:
+
+- render authorized projects by safe display name only;
+- expose `Démarrer le suivi local` for paused mappings and `Mettre en pause le suivi local` for active mappings;
+- toggle only the local `collectionEnabled` flag by `projectId`;
+- show a generic warning when the local mapping no longer exists;
+- do not call backend endpoints, start watchers, scan projects, schedule heartbeat, synchronize sessions, generate reports, export or share data.
+
+### Files changed
+
+- `agent/src/main.ts`
+- `agent/src/services/projectAuthorizationStore.ts`
+- `agent/src/services/projectAuthorizationStore.test.ts`
+- `agent/src/services/trayPrivacy.ts`
+- `agent/src/services/trayPrivacy.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts` failed because `setProjectCollectionEnabled` did not exist.
+- RED: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts` failed because tray project controls did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- projectAuthorizationStore.test.ts`: passed, 2/2.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- trayPrivacy.test.ts`: passed, 3/3.
+- `npm run typecheck --workspace @ghostcommit/agent`: passed.
+- `npm run lint --workspace @ghostcommit/agent`: passed.
+- `npm run test --workspace @ghostcommit/agent`: passed, 33/33.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 33/33, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### GitHub Actions validation
+
+Phase 3O was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28666279298
+- Job: `quality`
+- Head SHA: `a8ad8fb`
+- Result: passed in 2m23s.
+- CI evidence: PostgreSQL 16 container initialized, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3O product blocker but remains a CI maintenance item.
+
+### Gate decision
+
+Phase 3O is implemented, locally gate-validated and GitHub Actions PostgreSQL CI-validated. Phase 4 must not start from this state.
+
+## 2026-07-03 — Phase 1A PostgreSQL CI gate revalidation
+
+### Scope
+
+Revalidation only for the Phase 1A authentication/data-foundation gate against the current repository state. No Phase 1B public page, login UI, onboarding UI, app shell, repository connection, agent work or reporting work was started.
+
+### CI contract rechecked
+
+- `.github/workflows/ci.yml` starts PostgreSQL with `postgres:16-alpine`.
+- The CI `DATABASE_URL` targets `postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public`.
+- Dependencies install with `npm ci --ignore-scripts`; `npm install` is not used by CI.
+- Prisma Client generation runs before `prisma migrate deploy`.
+- `prisma migrate deploy` runs before `npm run test:e2e --workspace @ghostcommit/backend`.
+- `RUN_DATABASE_TESTS=true` is defined at job level.
+- `backend/test/auth.e2e-spec.ts` throws when `CI=true` without `RUN_DATABASE_TESTS=true`, so PostgreSQL e2e cannot be silently skipped in CI.
+
+### Phase 1A scenario coverage
+
+The first six PostgreSQL scenarios in `backend/test/auth.e2e-spec.ts` still cover the Phase 1A gate:
+
+1. invalid, expired and consumed OAuth state, with no secret/code/state echoing;
+2. user creation/reconnection and one idempotent personal workspace;
+3. refresh token rotation, replay rejection and token-family revocation;
+4. versioned consent, authenticated onboarding status and no collection activation;
+5. user A/B ownership protection through strict DTO validation;
+6. logout revocation, refresh-cookie clearing and safe refresh errors.
+
+Later scenarios in the same e2e file cover Phase 3 project/agent behavior and are additional coverage, not a Phase 1A scope expansion.
+
+### Local verification
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `CI=true` without `RUN_DATABASE_TESTS=true` plus `npm run test:e2e --workspace @ghostcommit/backend`: failed with the expected hard error preventing silent skips.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed; backend 10/10, agent 35/35, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+
+Local `prisma migrate deploy` against `localhost:5432` remains unavailable in this Windows shell with a generic Prisma schema-engine error, so real PostgreSQL execution evidence is the GitHub Actions CI run below.
+
+### GitHub Actions evidence
+
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28666456677
+- Event: `pull_request`
+- Branch: `codex/ghostcommit-v1-completion`
+- Head SHA: `59b9376bfef42862b85089ca5b438113246b0d3e`
+- Job: `quality`
+- Result: `SUCCESS`
+
+Passing CI steps included container initialization, `npm ci --ignore-scripts`, Prisma generation, `prisma migrate deploy`, lint, typecheck, unit tests, PostgreSQL integration tests with `RUN_DATABASE_TESTS=true`, and build.
+
+### Gate decision
+
+Phase 1A can be considered validated against real PostgreSQL via GitHub Actions CI in the current repository state. No Phase 1B work was started during this revalidation.
+
+## 2026-07-03 — Phase 3P authorized project watcher boundary
+
+### Scope
+
+Agent-local watcher hardening only:
+
+- add a watcher entry point for already-authorized local project mappings;
+- require `collectionEnabled: true` before watching;
+- watch only the local root stored in the mapping;
+- emit a separate safe `authorizedChanges` event containing project id, local alias, filtered relative path, event type and timestamp.
+
+No backend endpoint, activity/session synchronization, report generation, export, sharing, heartbeat scheduling or Phase 4 work was started.
+
+### Privacy decisions
+
+- Authorized watcher events never include absolute paths, parent directories, file contents, code diffs, raw hostnames, machine identifiers, tokens or secrets.
+- Sensitive paths are filtered locally before any authorized watcher event is emitted, including `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.env*`, key/certificate files, `secrets` and `private`.
+- Files outside the authorized project root are ignored.
+- The safe watcher boundary is intentionally not wired into legacy `ActivityTracker`, because the legacy session payload can still construct unsafe sync data until the owning session rewrite lands.
+- Existing legacy watcher methods remain only for compatibility with current tests and disconnect behavior; future session work must use the safe authorized watcher boundary.
+
+### Files changed
+
+- `agent/src/services/fileWatcher.ts`
+- `agent/src/services/fileWatcher.test.ts`
+- `docs/API_CONTRACTS.md`
+- `docs/PRIVACY_MODEL.md`
+- `docs/OBJECTIVE_PROGRESS.md`
+- `README.md`
+
+### Verification
+
+- RED: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts` failed because `watchAuthorizedProject` did not exist.
+- GREEN: `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed, 2/2.
+- `npm run test --workspace @ghostcommit/agent -- fileWatcher.test.ts`: passed after cross-platform Windows/POSIX path normalization hardening, 2/2.
+
+- `npm run db:generate`: passed.
+- `DATABASE_URL=postgresql://ghostcommit:ghostcommit@localhost:5432/ghostcommit_test?schema=public npm run db:validate`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck`: passed.
+- `npm test`: passed with backend 10/10, agent 35/35, dashboard 24/24 and shared no-test pass.
+- `npm run build`: passed.
+- `git diff --check`: passed with CRLF warnings only.
+
+### Gate decision
+
+Phase 3P is implemented and locally gate-validated. Phase 4 must not start from this state.
+
+### GitHub Actions validation
+
+Phase 3P was validated through PR #5:
+
+- PR: https://github.com/Alex-201Z/GhostCommit/pull/5
+- Run: https://github.com/Alex-201Z/GhostCommit/actions/runs/28667189752
+- Job: `quality`
+- Head SHA: `68f9ab1`
+- Result: passed in 2m22s.
+- CI evidence: PostgreSQL 16 container initialized, dependencies installed with `npm ci --ignore-scripts`, Prisma client generated, migrations deployed, lint, typecheck, unit tests, PostgreSQL integration tests and build completed successfully.
+- Annotation: GitHub warned that Node.js 20 is deprecated for `actions/checkout@v4` and `actions/setup-node@v4` because the runner forces Node.js 24. This is not a Phase 3P product blocker but remains a CI maintenance item.
+
+### CI gate decision
+
+Phase 3P authorized project watcher boundary is validated in GitHub Actions PostgreSQL CI. Phase 4 must not start from this state.

@@ -1,5 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { ConfigManager } from '../utils/config';
+import { AgentLinkConfirmation, AgentLinkConfirmPayload } from './agentLinking';
+import { ProjectCreatePayload } from './projectSelection';
 
 export interface ActivitySessionData {
   startTime: string;
@@ -71,6 +73,61 @@ export class ApiClient {
     } catch (error: any) {
       console.error('Error getting repos:', error.message);
       return [];
+    }
+  }
+
+  async confirmAgentLink(
+    payload: AgentLinkConfirmPayload,
+    userAccessToken: string,
+  ): Promise<AgentLinkConfirmation> {
+    try {
+      const response = await this.client.post('/agent/link/confirm', payload, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+        },
+      });
+      return response.data as AgentLinkConfirmation;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error confirming agent link:', message);
+      throw error;
+    }
+  }
+
+  async sendAgentHeartbeat(agentToken: string): Promise<AgentLinkConfirmation['installation']> {
+    try {
+      const response = await this.client.post(
+        '/agent/heartbeat',
+        undefined,
+        {
+          headers: {
+            Authorization: `Bearer ${agentToken}`,
+          },
+        },
+      );
+      return response.data as AgentLinkConfirmation['installation'];
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error sending agent heartbeat:', message);
+      throw error;
+    }
+  }
+
+  async createProject(
+    payload: ProjectCreatePayload,
+    userAccessToken: string,
+  ): Promise<Record<string, unknown>> {
+    try {
+      const response = await this.client.post('/projects', payload, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+        },
+      });
+      return response.data as Record<string, unknown>;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error('Error creating local project authorization:', message);
+      throw error;
     }
   }
 
